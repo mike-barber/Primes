@@ -157,6 +157,7 @@ pub mod primes {
         }
 
         // calculate the primes up to the specified limit
+        #[inline(always)]
         pub fn run_sieve(&mut self) {
             let mut factor = 3;
             let q = (self.sieve_size as f32).sqrt() as usize;
@@ -211,19 +212,24 @@ pub mod primes {
 fn main() {
     print!("Bit storage:   ");
     run_implementation::<FlagStorageBitVector>();
+    //run_parallel::<FlagStorageBitVector>();
 
     print!("Byte storage:  ");
     run_implementation::<FlagStorageByteVector>();
+    run_parallel::<FlagStorageByteVector>();
 }
+
+const RUN_DURATION_SECONDS:u64 = 10;
+const SIEVE_SIZE:usize = 1000000;
 
 fn run_implementation<T: FlagStorage>() {
     let mut passes = 0;
     let mut prime_sieve = None;
 
     let start_time = Instant::now();
-    let run_duration = Duration::from_secs(10);
+    let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
     while (Instant::now() - start_time) < run_duration {
-        let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(1000000);
+        let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
         sieve.run_sieve();
         prime_sieve.replace(sieve);
         passes += 1;
@@ -238,6 +244,44 @@ fn run_implementation<T: FlagStorage>() {
             &primes::PrimeValidator::default(),
         );
     }
+}
+
+fn run_parallel<T: FlagStorage>() {
+    use std::thread;
+
+    let start_time = Instant::now();
+    let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
+
+    let mut threads = Vec::new();
+    for _ in 0..num_cpus::get() {
+        let handle = thread::spawn(move || {
+            let mut last_sieve = None;
+            let mut passes = 0;
+            while (Instant::now() - start_time) < run_duration {
+                let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
+                sieve.run_sieve();
+                last_sieve.replace(sieve);
+                passes += 1;
+            }
+            // validate result is correct and return number of passes on this thread
+            let validator = primes::PrimeValidator::default();
+            assert!(validator.is_valid(SIEVE_SIZE, last_sieve.unwrap().count_primes()));
+            passes            
+        });
+        threads.push(handle);
+    }
+    let total_passes: usize = threads.into_iter().map(|t| t.join().unwrap()).sum();
+    let end_time = Instant::now();
+
+    let mut check_sieve:PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
+    check_sieve.run_sieve();
+
+    check_sieve.print_results(
+        false,
+        end_time - start_time,
+        total_passes,
+        &primes::PrimeValidator::default(),
+    );
 }
 
 #[cfg(test)]
