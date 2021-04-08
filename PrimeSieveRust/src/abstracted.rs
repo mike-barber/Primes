@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 
 use primes::{FlagStorage, FlagStorageBitVector, FlagStorageByteVector, PrimeSieve};
+use tokio::task;
 
 pub mod primes {
     use std::{collections::HashMap, time::Duration, usize};
@@ -45,7 +46,7 @@ pub mod primes {
 
     /// Trait defining the interface to different kinds of storage, e.g.
     /// bits within bytes, a vector of bytes, etc.
-    pub trait FlagStorage : Send {
+    pub trait FlagStorage: Send {
         /// create new storage for given number of flags pre-initialised to all true
         fn create_true(size: usize) -> Self;
 
@@ -57,13 +58,12 @@ pub mod primes {
     }
 
     /// Storage using a simple vector of bytes.
-    /// Doing the same with bools is equivalent, as bools are currently 
-    /// represented as bytes in Rust. However, this is not guaranteed to 
-    /// remain so for all time. To ensure consistent memory use in the future, 
+    /// Doing the same with bools is equivalent, as bools are currently
+    /// represented as bytes in Rust. However, this is not guaranteed to
+    /// remain so for all time. To ensure consistent memory use in the future,
     /// we're explicitly using bytes (u8) here.
     pub struct FlagStorageByteVector(Vec<u8>);
-    impl FlagStorage for FlagStorageByteVector
-    {
+    impl FlagStorage for FlagStorageByteVector {
         fn create_true(size: usize) -> Self {
             FlagStorageByteVector(vec![1; size])
         }
@@ -209,7 +209,8 @@ pub mod primes {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), ()> {
     print!("Bit storage:   ");
     run_implementation::<FlagStorageBitVector>();
     //run_parallel::<FlagStorageBitVector>();
@@ -217,10 +218,15 @@ fn main() {
     print!("Byte storage:  ");
     run_implementation::<FlagStorageByteVector>();
     run_parallel::<FlagStorageByteVector>();
+    run_parallel_tokio::<FlagStorageByteVector>().await;
+    run_parallel_tokio_local_merge::<FlagStorageByteVector>().await;
+    run_parallel_tokio_local_merge_task::<FlagStorageByteVector>().await;
+
+    Ok(())
 }
 
-const RUN_DURATION_SECONDS:u64 = 10;
-const SIEVE_SIZE:usize = 1000000;
+const RUN_DURATION_SECONDS: u64 = 5;
+const SIEVE_SIZE: usize = 1000000;
 
 fn run_implementation<T: FlagStorage>() {
     let mut passes = 0;
@@ -272,15 +278,134 @@ fn run_parallel<T: 'static + FlagStorage>() {
         });
         threads.push(handle);
     }
-    
+
     // wait for all threads to terminate, then take the end time
-    let results:Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+    let results: Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
     let end_time = Instant::now();
-    
+
     // sum total passes, and grab the final sieve from the first thread for reporting
     let total_passes: usize = results.iter().map(|r| r.0).sum();
     let check_sieve = &results.first().unwrap().1;
-    
+
+    check_sieve.print_results(
+        false,
+        end_time - start_time,
+        total_passes,
+        &primes::PrimeValidator::default(),
+    );
+}
+
+async fn run_parallel_tokio<T: 'static + FlagStorage>() {
+    let start_time = Instant::now();
+    let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
+    let num_tasks = num_cpus::get();
+    //let num_threads = 1;
+
+    let mut tasks = Vec::with_capacity(num_tasks);
+    for _ in 0..num_tasks {
+        let handle = tokio::spawn(async move {
+            let mut last_sieve = None;
+            let mut local_passes = 0;
+            while (Instant::now() - start_time) < run_duration {
+                let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
+                sieve.run_sieve();
+                last_sieve.replace(sieve);
+                local_passes += 1;
+            }
+            // validate result is correct and return number of passes on this thread
+            // let validator = primes::PrimeValidator::default();
+            // assert!(validator.is_valid(SIEVE_SIZE, last_sieve.unwrap().count_primes()));
+            (local_passes, last_sieve.unwrap())
+        });
+        tasks.push(handle);
+    }
+
+    // wait for all threads to terminate, then take the end time
+    let mut results = Vec::with_capacity(num_tasks);
+    for task in tasks {
+        results.push(task.await.unwrap());
+    }
+    let end_time = Instant::now();
+
+    // sum total passes, and grab the final sieve from the first thread for reporting
+    let total_passes: usize = results.iter().map(|r| r.0).sum();
+    let check_sieve = &results.first().unwrap().1;
+
+    check_sieve.print_results(
+        false,
+        end_time - start_time,
+        total_passes,
+        &primes::PrimeValidator::default(),
+    );
+}
+
+// similar to the C++ _PAR implementation -- local tasks on a thread pool
+async fn run_parallel_tokio_local_merge<T: 'static + FlagStorage>() {
+    let start_time = Instant::now();
+    let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
+    let num_tasks = num_cpus::get();
+    //let num_threads = 1;
+
+    let mut total_passes = 0;
+    while (Instant::now() - start_time) < run_duration {
+        let mut tasks = Vec::with_capacity(num_tasks);
+        for _ in 0..num_tasks {
+            let handle = tokio::spawn(async move {
+                let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
+                sieve.run_sieve();
+                1 // single pass
+            });
+            tasks.push(handle);
+        }
+
+        for task in tasks {
+            let passes = task.await.unwrap();
+            total_passes += passes;
+        }
+    }
+    let end_time = Instant::now();
+
+    let mut check_sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
+    check_sieve.run_sieve();
+    check_sieve.print_results(
+        false,
+        end_time - start_time,
+        total_passes,
+        &primes::PrimeValidator::default(),
+    );
+}
+
+// similar to the C++ _PAR implementation -- local tasks on a thread pool
+// using lightweight tasks here instead; using spawn_blocking as the tasks 
+// are, well, blocking! 
+async fn run_parallel_tokio_local_merge_task<T: 'static + FlagStorage>() {
+    let start_time = Instant::now();
+    let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
+    let num_tasks = num_cpus::get();
+    //let num_threads = 1;
+
+    let mut total_passes = 0;
+    while (Instant::now() - start_time) < run_duration {
+        let mut tasks = Vec::with_capacity(num_tasks);
+        for _ in 0..num_tasks {
+            // note: using tokio::task here
+            let handle = task::spawn_blocking(|| {
+                let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
+                sieve.run_sieve();
+                1 // single pass
+            });
+            tasks.push(handle);
+        }
+
+        for task in tasks {
+            let passes = task.await.unwrap();
+            total_passes += passes;
+        }
+    }
+    let end_time = Instant::now();
+
+    let mut check_sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
+    check_sieve.run_sieve();
     check_sieve.print_results(
         false,
         end_time - start_time,
