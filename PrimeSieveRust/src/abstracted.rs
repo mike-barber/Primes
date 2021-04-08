@@ -45,7 +45,7 @@ pub mod primes {
 
     /// Trait defining the interface to different kinds of storage, e.g.
     /// bits within bytes, a vector of bytes, etc.
-    pub trait FlagStorage {
+    pub trait FlagStorage : Send {
         /// create new storage for given number of flags pre-initialised to all true
         fn create_true(size: usize) -> Self;
 
@@ -246,36 +246,41 @@ fn run_implementation<T: FlagStorage>() {
     }
 }
 
-fn run_parallel<T: FlagStorage>() {
+fn run_parallel<T: 'static + FlagStorage>() {
     use std::thread;
 
     let start_time = Instant::now();
     let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
+    let num_threads = num_cpus::get();
+    //let num_threads = 1;
 
-    let mut threads = Vec::new();
-    for _ in 0..num_cpus::get() {
+    let mut threads = Vec::with_capacity(num_threads);
+    for _ in 0..num_threads {
         let handle = thread::spawn(move || {
             let mut last_sieve = None;
-            let mut passes = 0;
+            let mut local_passes = 0;
             while (Instant::now() - start_time) < run_duration {
                 let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
                 sieve.run_sieve();
                 last_sieve.replace(sieve);
-                passes += 1;
+                local_passes += 1;
             }
             // validate result is correct and return number of passes on this thread
-            let validator = primes::PrimeValidator::default();
-            assert!(validator.is_valid(SIEVE_SIZE, last_sieve.unwrap().count_primes()));
-            passes            
+            // let validator = primes::PrimeValidator::default();
+            // assert!(validator.is_valid(SIEVE_SIZE, last_sieve.unwrap().count_primes()));
+            (local_passes, last_sieve.unwrap())
         });
         threads.push(handle);
     }
-    let total_passes: usize = threads.into_iter().map(|t| t.join().unwrap()).sum();
+    
+    // wait for all threads to terminate, then take the end time
+    let results:Vec<_> = threads.into_iter().map(|t| t.join().unwrap()).collect();
     let end_time = Instant::now();
-
-    let mut check_sieve:PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
-    check_sieve.run_sieve();
-
+    
+    // sum total passes, and grab the final sieve from the first thread for reporting
+    let total_passes: usize = results.iter().map(|r| r.0).sum();
+    let check_sieve = &results.first().unwrap().1;
+    
     check_sieve.print_results(
         false,
         end_time - start_time,
