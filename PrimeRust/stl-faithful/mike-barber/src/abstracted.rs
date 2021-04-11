@@ -89,28 +89,43 @@ pub mod primes {
 
     /// Storage using a vector of bytes, but addressing individual bits within each
     pub struct FlagStorageBitVector {
-        words: Vec<u8>,
+        words: Vec<u32>,
         length_bits: usize,
     }
 
-    const U8_BITS: usize = 8;
+    const WORD_BITS: usize = 32;
     impl FlagStorage for FlagStorageBitVector {
         fn create_true(size: usize) -> Self {
-            let num_words = size / U8_BITS + (size % U8_BITS).min(1);
+            let num_words = size / WORD_BITS + (size % WORD_BITS).min(1);
             FlagStorageBitVector {
-                words: vec![0xff; num_words],
+                words: vec![!0; num_words],
                 length_bits: size,
             }
         }
 
         fn reset_flags(&mut self, start: usize, skip: usize) {
+            // Note: Unsafe usage to ensure that we elide the bounds check reliably.
+            //       It's a bit hit-or-miss otherwise, depending on how stuff is inlined.
+            //       We have ensured that word_index < self.words.len().
             let mut i = start;
-            while i < self.words.len() * U8_BITS {
-                let word_idx = i / U8_BITS;
-                let bit_idx = i % U8_BITS;
-                // Note: Unsafe usage to ensure that we elide the bounds check reliably.
-                //       It's a bit hit-or-miss otherwise, depending on how stuff is inlined.
-                //       We have ensured that word_index < self.words.len().
+            let chunks_end = self.words.len() * WORD_BITS - skip * 4;
+            let final_end = self.words.len() * WORD_BITS;
+            while i < chunks_end {
+                let indices = [i, i + skip, i + skip * 2, i + skip * 3];
+                let words = op_unary(&indices, |ix| ix / WORD_BITS);
+                let bits = op_unary(&indices, |ix| ix % WORD_BITS);
+                let masks = op_unary(&bits, |b| !(1 << b));
+                unsafe {
+                    *self.words.get_unchecked_mut(words[0]) &= masks[0];
+                    *self.words.get_unchecked_mut(words[1]) &= masks[1];
+                    *self.words.get_unchecked_mut(words[2]) &= masks[2];
+                    *self.words.get_unchecked_mut(words[3]) &= masks[3];
+                }
+                i += skip * 4;
+            }
+            while i < final_end {
+                let word_idx = i / WORD_BITS;
+                let bit_idx = i % WORD_BITS;
                 unsafe {
                     *self.words.get_unchecked_mut(word_idx) &= !(1 << bit_idx);
                 }
@@ -122,9 +137,23 @@ pub mod primes {
             if index >= self.length_bits {
                 return false;
             }
-            let word = self.words.get(index / U8_BITS).unwrap();
-            *word & (1 << (index % U8_BITS)) != 0
+            let word = self.words.get(index / WORD_BITS).unwrap();
+            *word & (1 << (index % WORD_BITS)) != 0
         }
+    }
+
+    // arranged for autovectorisation
+    fn op_unary<F, T, U>(a: &[T; 4], function: F) -> [U; 4]
+    where
+        F: Fn(T) -> U,
+        T: Copy,
+    {
+        [
+            function(a[0]),
+            function(a[1]),
+            function(a[2]),
+            function(a[3]),
+        ]
     }
 
     pub struct PrimeSieve<T: FlagStorage> {
