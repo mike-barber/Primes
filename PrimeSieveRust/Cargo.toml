@@ -10,6 +10,9 @@ edition = "2018"
 num_cpus="1.13"
 tokio = { version = "1.4", features = ["rt", "rt-multi-thread", "macros"] }
 
+[dev-dependencies]
+tokio-test = "0.4"
+
 [profile.release]
 opt-level = 3
 lto = true

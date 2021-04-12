@@ -1,10 +1,14 @@
 use std::time::{Duration, Instant};
 
-use primes::{FlagStorage, FlagStorageBitVector, FlagStorageByteVector, PrimeSieve};
+use primes::{
+    FlagStorage, FlagStorageBitVector, FlagStorageByteVector, PrimeSieve, PrimeSieveAsync,
+};
 use tokio::task;
 
 pub mod primes {
-    use std::{collections::HashMap, time::Duration, usize};
+    use std::{cell::UnsafeCell, collections::HashMap, time::Duration, usize};
+
+    use tokio::task;
 
     /// Validator to compare against known primes.
     /// Pulled this out into a separate struct, as it's defined
@@ -86,10 +90,100 @@ pub mod primes {
         }
     }
 
+    struct UnsafeMutPtr {
+        ptr: *mut u8,
+    }
+    impl UnsafeMutPtr {
+        fn new(ptr: *mut u8) -> Self {
+            UnsafeMutPtr { ptr }
+        }
+    }
+    unsafe impl Send for UnsafeMutPtr {}
+
+    fn ceiling(numerator: isize, denominator: isize) -> isize {
+        (numerator + denominator - 1) / denominator
+    }
+
     /// Storage using a vector of bytes, but addressing individual bits within each
     pub struct FlagStorageBitVector {
         words: Vec<u8>,
         length_bits: usize,
+    }
+
+    // darn it -- can't use async in traits yet.
+    impl FlagStorageBitVector {
+        #[inline(always)]
+        #[allow(dead_code)]
+        async fn reset_flags_async_old(&mut self, start: usize, skip: usize) {
+            let mut i = start;
+            while i < self.words.len() * U8_BITS {
+                let word_idx = i / U8_BITS;
+                let bit_idx = i % U8_BITS;
+                // unsafe get_mut_unchecked is superfluous here -- the compiler
+                // seems to know that we're within bounds, so it yields no performance
+                // benefit.
+                unsafe {
+                    *self.words.get_unchecked_mut(word_idx) &= !(1 << bit_idx);
+                }
+                i += skip;
+            }
+        }
+        #[inline(always)]
+        async fn reset_flags_async(&mut self, start: usize, skip: usize) {
+            let first_word = start / U8_BITS;
+            let words_remaining = self.words.len() - first_word;
+            let words_chunks = words_remaining / 4;
+            let word_starts = [
+                first_word,
+                first_word + words_chunks,
+                first_word + words_chunks * 2,
+                first_word + words_chunks * 3,
+            ];
+
+            let ptr0 = UnsafeMutPtr::new(self.words.as_mut_ptr());
+            let ptr1 = UnsafeMutPtr::new(self.words.as_mut_ptr());
+            let ptr2 = UnsafeMutPtr::new(self.words.as_mut_ptr());
+            let ptr3 = UnsafeMutPtr::new(self.words.as_mut_ptr());
+
+            // spin up other tasks to handle chunks 1,2,3
+            let handle1 = task::spawn_blocking(move || {
+                Self::reset_flags_internal(ptr1, word_starts[1], words_chunks, start, skip)
+            });
+            let handle2 = task::spawn_blocking(move || {
+                Self::reset_flags_internal(ptr2, word_starts[2], words_chunks,  start,skip)
+            });
+            let handle3 = task::spawn_blocking(move || {
+                Self::reset_flags_internal(ptr3, word_starts[3], words_chunks,  start,skip)
+            });
+
+            // and process chunk 0 right here
+            Self::reset_flags_internal(ptr0, word_starts[0], words_chunks,  start, skip).await;
+
+            let _ = handle1.await.unwrap();
+            let _ = handle2.await.unwrap();
+            let _ = handle3.await.unwrap();
+        }
+
+        #[inline(always)]
+        async fn reset_flags_internal(array: UnsafeMutPtr, start_word: usize, word_chunks: usize, start: usize, skip: usize) {
+            // find first index, then run until we're out of words
+            let word_idx = start_word * U8_BITS;
+            let rel_start = word_idx as isize - start as isize;
+            let num_skips_ceil = ceiling(rel_start, skip as isize);
+            let actual_start = num_skips_ceil * skip as isize + start as isize;
+            
+            let end_index = (start_word + word_chunks) * 8; // check this
+            let mut i = actual_start;
+            let ptr = array.ptr;
+            while i < end_index as isize {
+                let word_idx = i / U8_BITS as isize;
+                let bit_idx = i % U8_BITS as isize;
+                unsafe {
+                    *ptr.offset(word_idx) &= !(1 << bit_idx);
+                }
+                i += skip as isize;
+            }
+        }
     }
 
     const U8_BITS: usize = 8;
@@ -207,12 +301,96 @@ pub mod primes {
             );
         }
     }
+
+    pub struct PrimeSieveAsync {
+        sieve_size: usize,
+        flags: FlagStorageBitVector,
+    }
+
+    impl PrimeSieveAsync {
+        pub fn new(sieve_size: usize) -> Self {
+            let num_flags = sieve_size / 2 + 1;
+            PrimeSieveAsync {
+                sieve_size,
+                flags: FlagStorageBitVector::create_true(num_flags),
+            }
+        }
+
+        fn is_num_flagged(&self, number: usize) -> bool {
+            if number % 2 == 0 {
+                return false;
+            }
+            let index = number / 2;
+            self.flags.get(index)
+        }
+
+        // count number of primes (not optimal, but doesn't need to be)
+        pub fn count_primes(&self) -> usize {
+            (1..self.sieve_size)
+                .filter(|v| self.is_num_flagged(*v))
+                .count()
+        }
+
+        // calculate the primes up to the specified limit
+        #[inline(always)]
+        pub async fn run_sieve(&mut self) {
+            let mut factor = 3;
+            let q = (self.sieve_size as f32).sqrt() as usize;
+
+            // note: need to check up to and including q, otherwise we
+            // fail to catch cases like sieve_size = 1000
+            while factor <= q {
+                // find next factor - next still-flagged number
+                factor = (factor..self.sieve_size)
+                    .find(|n| self.is_num_flagged(*n))
+                    .unwrap();
+
+                // reset flags starting at `start`, every `factor`'th flag
+                let start = factor * 3 / 2;
+                let skip = factor;
+                self.flags.reset_flags_async(start, skip).await;
+
+                factor += 2;
+            }
+        }
+
+        pub fn print_results(
+            &self,
+            show_results: bool,
+            duration: Duration,
+            passes: usize,
+            validator: &PrimeValidator,
+        ) {
+            if show_results {
+                print!("2,");
+                for num in (3..self.sieve_size).filter(|n| self.is_num_flagged(*n)) {
+                    print!("{},", num);
+                }
+                print!("\n");
+            }
+
+            let count = self.count_primes();
+
+            println!(
+                "Passes: {}, Time: {}, Avg: {}, Limit: {}, Count: {}, Valid: {}",
+                passes,
+                duration.as_secs_f32(),
+                duration.as_secs_f32() / passes as f32,
+                self.sieve_size,
+                count,
+                validator.is_valid(self.sieve_size, self.count_primes())
+            );
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     print!("Bit storage:   ");
     run_implementation::<FlagStorageBitVector>();
+
+    print!("Bit async:     ");
+    run_implementation_async().await;
     //run_parallel::<FlagStorageBitVector>();
 
     print!("Byte storage:  ");
@@ -237,6 +415,30 @@ fn run_implementation<T: FlagStorage>() {
     while (Instant::now() - start_time) < run_duration {
         let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(SIEVE_SIZE);
         sieve.run_sieve();
+        prime_sieve.replace(sieve);
+        passes += 1;
+    }
+    let end_time = Instant::now();
+
+    if let Some(sieve) = prime_sieve {
+        sieve.print_results(
+            false,
+            end_time - start_time,
+            passes,
+            &primes::PrimeValidator::default(),
+        );
+    }
+}
+
+async fn run_implementation_async() {
+    let mut passes = 0;
+    let mut prime_sieve = None;
+
+    let start_time = Instant::now();
+    let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
+    while (Instant::now() - start_time) < run_duration {
+        let mut sieve: PrimeSieveAsync = PrimeSieveAsync::new(SIEVE_SIZE);
+        sieve.run_sieve().await;
         prime_sieve.replace(sieve);
         passes += 1;
     }
@@ -376,8 +578,8 @@ async fn run_parallel_tokio_local_merge<T: 'static + FlagStorage>() {
 }
 
 // similar to the C++ _PAR implementation -- local tasks on a thread pool
-// using lightweight tasks here instead; using spawn_blocking as the tasks 
-// are, well, blocking! 
+// using lightweight tasks here instead; using spawn_blocking as the tasks
+// are, well, blocking!
 async fn run_parallel_tokio_local_merge_task<T: 'static + FlagStorage>() {
     let start_time = Instant::now();
     let run_duration = Duration::from_secs(RUN_DURATION_SECONDS);
@@ -420,6 +622,21 @@ mod tests {
     use crate::primes::{
         FlagStorage, FlagStorageBitVector, FlagStorageByteVector, PrimeSieve, PrimeValidator,
     };
+
+    #[test]
+    fn sieve_known_correct_bits_async() {
+        let validator = PrimeValidator::default();
+        for (sieve_size, expected_primes) in validator.known_results().iter() {
+            let mut sieve: PrimeSieveAsync = PrimeSieveAsync::new(*sieve_size);
+            tokio_test::block_on(sieve.run_sieve());
+            assert_eq!(
+                *expected_primes,
+                sieve.count_primes(),
+                "wrong number of primes for sieve = {}",
+                sieve_size
+            );
+        }
+    }
 
     #[test]
     fn sieve_known_correct_bits() {
