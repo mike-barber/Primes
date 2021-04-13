@@ -146,22 +146,25 @@ pub mod primes {
             let ptr3 = UnsafeMutPtr::new(self.words.as_mut_ptr());
 
             // spin up other tasks to handle chunks 1,2,3
-            let handle1 = task::spawn_blocking(move || {
-                Self::reset_flags_internal(ptr1, word_starts[1], words_chunks, start, skip)
-            });
-            let handle2 = task::spawn_blocking(move || {
-                Self::reset_flags_internal(ptr2, word_starts[2], words_chunks,  start,skip)
-            });
-            let handle3 = task::spawn_blocking(move || {
-                Self::reset_flags_internal(ptr3, word_starts[3], words_chunks,  start,skip)
-            });
+            // let handle1 = task::spawn_blocking(move || {
+            //     Self::reset_flags_internal(ptr1, word_starts[1], words_chunks, start, skip)
+            // });
+            // let handle2 = task::spawn_blocking(move || {
+            //     Self::reset_flags_internal(ptr2, word_starts[2], words_chunks,  start,skip)
+            // });
+            // let handle3 = task::spawn_blocking(move || {
+            //     Self::reset_flags_internal(ptr3, word_starts[3], words_chunks,  start,skip)
+            // });
 
             // and process chunk 0 right here
             Self::reset_flags_internal(ptr0, word_starts[0], words_chunks,  start, skip).await;
+            Self::reset_flags_internal(ptr1, word_starts[1], words_chunks,  start, skip).await;
+            Self::reset_flags_internal(ptr2, word_starts[2], words_chunks,  start, skip).await;
+            Self::reset_flags_internal(ptr3, word_starts[3], words_chunks,  start, skip).await;
 
-            let _ = handle1.await.unwrap();
-            let _ = handle2.await.unwrap();
-            let _ = handle3.await.unwrap();
+            // let _ = handle1.await.unwrap();
+            // let _ = handle2.await.unwrap();
+            // let _ = handle3.await.unwrap();
         }
 
         #[inline(always)]
@@ -626,9 +629,12 @@ mod tests {
     #[test]
     fn sieve_known_correct_bits_async() {
         let validator = PrimeValidator::default();
-        for (sieve_size, expected_primes) in validator.known_results().iter() {
+        let mut sizes: Vec<_> = validator.known_results().keys().copied().collect();
+        sizes.sort();
+        for sieve_size in &sizes {
             let mut sieve: PrimeSieveAsync = PrimeSieveAsync::new(*sieve_size);
             tokio_test::block_on(sieve.run_sieve());
+            let expected_primes = validator.known_results().get(sieve_size).unwrap();
             assert_eq!(
                 *expected_primes,
                 sieve.count_primes(),
