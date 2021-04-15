@@ -2,7 +2,11 @@ use primes::{
     print_results_stderr, report_results_stdout, FlagStorage, FlagStorageBitVector,
     FlagStorageByteVector, PrimeSieve,
 };
-use std::time::{Duration, Instant};
+use std::{
+    num::ParseIntError,
+    str::FromStr,
+    time::{Duration, Instant},
+};
 use structopt::StructOpt;
 
 pub mod primes {
@@ -239,10 +243,10 @@ pub mod primes {
 #[derive(StructOpt, Debug)]
 #[structopt(name = "abstracted")]
 struct CommandLineOptions {
-    /// Number of threads. If not specified, do two runs for both
-    /// single threaded case and maximum concurrency.
+    /// Number of threads, or "all" to use all available threads.
+    /// If not specified, do two runs for both single threaded case and maximum concurrency.
     #[structopt(short, long)]
-    threads: Option<usize>,
+    threads: Option<ThreadOptions>,
 
     /// Run duration
     #[structopt(short, long, default_value = "5")]
@@ -270,6 +274,23 @@ struct CommandLineOptions {
     bytes: bool,
 }
 
+#[derive(Debug)]
+enum ThreadOptions {
+    All,
+    Number(usize),
+}
+impl FromStr for ThreadOptions {
+    type Err = ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.to_lowercase() == "all" {
+            Ok(ThreadOptions::All)
+        } else {
+            let num: usize = s.parse()?;
+            Ok(ThreadOptions::Number(num))
+        }
+    }
+}
+
 fn main() {
     // command line options are handled by the `structopt` and `clap` crates, which
     // makes life very pleasant indeed.
@@ -279,11 +300,16 @@ fn main() {
     let repetitions = opt.repetitions;
     let run_duration = Duration::from_secs(opt.seconds);
 
+    // decide how many threads to use; do both single and parallel if nothing is specified
     let thread_options = match opt.threads {
-        Some(t) => vec![t],
+        Some(t) => match t {
+            ThreadOptions::All => vec![num_cpus::get()],
+            ThreadOptions::Number(n) => vec![n],
+        },
         None => vec![1, num_cpus::get()],
     };
 
+    // decide which implementations we should run; both if unspecified
     let (run_bits, run_bytes) = match (opt.bits, opt.bytes) {
         (false, false) => (true, true),
         (bits, bytes) => (bits, bytes),
