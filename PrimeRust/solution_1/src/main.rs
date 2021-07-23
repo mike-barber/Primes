@@ -94,6 +94,7 @@ pub mod primes {
             }
         }
 
+        #[inline(always)]
         fn get(&self, index: usize) -> bool {
             if let Some(val) = self.0.get(index) {
                 *val == 1
@@ -134,6 +135,7 @@ pub mod primes {
             }
         }
 
+        #[inline(always)]
         fn get(&self, index: usize) -> bool {
             if index >= self.length_bits {
                 return false;
@@ -177,6 +179,7 @@ pub mod primes {
             }
         }
 
+        #[inline(always)]
         fn get(&self, index: usize) -> bool {
             if index >= self.length_bits {
                 return false;
@@ -219,6 +222,7 @@ pub mod primes {
             }
         }
 
+        #[inline(always)]
         fn reset_flags(&mut self, start: usize, skip: usize) {
             let chunk = self.words.len();
             for bit in 0..8 {
@@ -245,6 +249,7 @@ pub mod primes {
             }
         }
 
+        #[inline(always)]
         fn get(&self, index: usize) -> bool {
             if index > self.length_bits {
                 return false;
@@ -275,6 +280,7 @@ pub mod primes {
             }
         }
 
+        #[inline(always)]
         fn is_num_flagged(&self, number: usize) -> bool {
             if number % 2 == 0 {
                 return false;
