@@ -53,7 +53,7 @@ pub mod primes {
             }
         }
 
-        #[allow(dead_code)]
+        #[cfg(test)]
         pub fn known_results(&self) -> &HashMap<usize, usize> {
             &self.0
         }
