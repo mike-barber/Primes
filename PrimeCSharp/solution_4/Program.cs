@@ -16,7 +16,7 @@ namespace Solution4
 
             WarmupJit();
 
-            for (var i = 0; i < 5; ++i)
+            for (var i = 0; i < 3; ++i)
                 RunSingleThreaded();
 
             for (var i = 0; i < 3; ++i)

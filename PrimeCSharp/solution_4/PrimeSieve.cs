@@ -12,6 +12,7 @@ namespace Solution4
     public class PrimeSieve : IDisposable
     {
         const int _divide = 5; // 2^5 == 32 
+        const int _wordBits = sizeof(uint) * 8;
 
         readonly int _sieveSize;
         readonly int _numBits;
@@ -23,8 +24,7 @@ namespace Solution4
         {
             _sieveSize = size;
             _numBits = (size + 1) / 2;
-
-            _numWords = _numBits / sizeof(uint) + 1;
+            _numWords = _numBits / _wordBits + 1;
 
             // allocate unmanaged heap memory, and zero it
             _words = Marshal.AllocHGlobal(_numWords * sizeof(uint));
@@ -42,13 +42,14 @@ namespace Solution4
         public void RunSieve()
         {
             var q = (int)Math.Sqrt(_sieveSize);
+            var factor = 3;
+
             unsafe
             {
                 uint* ptr = (uint*)_words.ToPointer();
                 var span = new Span<uint>(_words.ToPointer(), _numWords);
 
-                var factor = 3;
-                while (factor <= q)
+                while (true)
                 {
                     // find next factor - next still-flagged number
                     var index = factor / 2;
@@ -61,8 +62,11 @@ namespace Solution4
                     }
                     factor = index * 2 + 1;
 
-                    // set bits using unsafe pointer and unrolled loop
+                    // check completion before resetting bits
+                    if (factor > q)
+                        break;
 
+                    // set bits using unsafe pointer and unrolled loop
                     var i0 = (factor * factor) >> 1;
                     var i1 = i0 + factor;
                     var i2 = i0 + factor * 2;
