@@ -11,6 +11,7 @@ namespace Solution4
     public class PrimeSieve
     {
         const int _divide = 5; // 2^5 == 32 
+        const int _wordBits = sizeof(uint) * 8;
 
         readonly int _sieveSize;
         readonly int _numBits;
@@ -21,7 +22,7 @@ namespace Solution4
             _sieveSize = size;
             _numBits = (size + 1) / 2;
 
-            var numWords = _numBits / sizeof(uint) + 1;
+            var numWords = _numBits / _wordBits + 1;
             _words = new uint[numWords];
             // TODO: IntPtr ptr = Marshal.AllocHGlobal(..); .. Marshal.FreeHGlobal(hglobal)
         }
