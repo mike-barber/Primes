@@ -32,13 +32,13 @@ namespace Solution4
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RunSieve()
         {
-            var q = (int)Math.Sqrt(this._sieveSize);
+            var q = (int)Math.Sqrt(_sieveSize);
 
             var factor = 3;
-            while (factor <= q)
+            while (true)
             {
                 // find next factor - next still-flagged number
-                var index = factor / 2;
+                var index = factor >> 1;
                 while (index < _numBits)
                 {
                     if (GetBit(index))
@@ -47,6 +47,14 @@ namespace Solution4
                     ++index;
                 }
                 factor = index * 2 + 1;
+
+                // check for termination _before_ resetting flags;
+                // note: need to check up to and including q, otherwise we
+                // fail to catch cases like sieve_size = 1000
+                if (factor > q) 
+                {
+                    break;
+                }
 
                 // set bits using unsafe pointer and unrolled loop
                 unsafe
@@ -84,6 +92,7 @@ namespace Solution4
                     }
                 }
 
+                // advance factor
                 factor += 2;
             }
         }

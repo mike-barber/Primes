@@ -14,7 +14,7 @@ namespace Solution4
         {
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
 
-            for (var i = 0; i < 2; ++i)
+            for (var i = 0; i < 3; ++i)
                 RunSingleThreaded();
 
             for (var i = 0; i < 3; ++i)
