@@ -24,7 +24,6 @@ namespace Solution4
 
             var numWords = _numBits / _wordBits + 1;
             _words = new uint[numWords];
-            // TODO: IntPtr ptr = Marshal.AllocHGlobal(..); .. Marshal.FreeHGlobal(hglobal)
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -40,11 +39,8 @@ namespace Solution4
             {
                 // find next factor - next still-flagged number
                 var index = factor >> 1;
-                while (index < _numBits)
+                while ((index < _numBits) && !GetBit(index))
                 {
-                    if (GetBit(index))
-                        break;
-
                     ++index;
                 }
                 factor = index * 2 + 1;
@@ -98,6 +94,7 @@ namespace Solution4
             }
         }
 
+        // this does not need to be efficient
         public int CountPrimes()
         {
             int count = 0;
@@ -110,7 +107,5 @@ namespace Solution4
         }
 
         public bool IsValid => KnownPrimes.IsValid(_sieveSize, CountPrimes());
-
-        // TODO: implement IDisposable.
     }
 }
