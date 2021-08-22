@@ -11,11 +11,12 @@ use std::{
 };
 use structopt::StructOpt;
 
-use crate::unrolled::FlagStorageUnrolledBits8;
+use crate::{unrolled32::FlagStorageUnrolledBits32, unrolled8::FlagStorageUnrolledBits8};
 
 mod flag_storage;
 mod patterns;
-mod unrolled;
+mod unrolled8;
+mod unrolled32;
 
 
 pub mod primes {
@@ -897,6 +898,16 @@ fn main() {
                     opt.print,
                 );
             }
+            for _ in 0..repetitions {
+                run_implementation::<FlagStorageUnrolledBits32>(
+                    "bit-storage-unrolled32",
+                    1,
+                    run_duration,
+                    threads,
+                    limit,
+                    opt.print,
+                );
+            }
         }
     }
 }
@@ -974,7 +985,7 @@ fn run_implementation<T: 'static + FlagStorage + Send>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{flag_storage::FlagStorage, primes::{PrimeValidator, minimum_start, square_start}, unrolled::FlagStorageUnrolledBits8};
+    use crate::{flag_storage::FlagStorage, primes::{PrimeValidator, minimum_start, square_start}, unrolled32::FlagStorageUnrolledBits32, unrolled8::FlagStorageUnrolledBits8};
 
     #[test]
     fn sieve_known_correct_bits() {
@@ -1011,8 +1022,13 @@ mod tests {
     }
 
     #[test]
-    fn sieve_known_correct_unrolled_bits() {
+    fn sieve_known_correct_unrolled8_bits() {
         sieve_known_correct::<FlagStorageUnrolledBits8>();
+    }
+    
+    #[test]
+    fn sieve_known_correct_unrolled32_bits() {
+        sieve_known_correct::<FlagStorageUnrolledBits32>();
     }
 
     fn sieve_known_correct<T: FlagStorage>() {
@@ -1072,9 +1088,15 @@ mod tests {
     }
 
     #[test]
-    fn storage_bit_unrolled_correct() {
+    fn storage_bit_unrolled8_correct() {
         basic_storage_correct::<FlagStorageUnrolledBits8>();
     }
+
+    #[test]
+    fn storage_bit_unrolled32_correct() {
+        basic_storage_correct::<FlagStorageUnrolledBits32>();
+    }
+
 
     fn basic_storage_correct<T: FlagStorage>() {
         let size = 100_000;

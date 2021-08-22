@@ -1,24 +1,27 @@
-use crate::{flag_storage::FlagStorage, patterns::{MASK_PATTERNS_U8, index_pattern}};
+use crate::{flag_storage::FlagStorage, patterns::{MASK_PATTERNS_U32, index_pattern}};
 
-
-pub struct FlagStorageUnrolledBits8 {
-    words: Vec<u8>,
+pub struct FlagStorageUnrolledBits32 {
+    words: Vec<u32>,
     length_bits: usize,
 }
 
-impl FlagStorageUnrolledBits8 {
-    const BITS: usize = u8::BITS as usize;
+impl FlagStorageUnrolledBits32 {
+    const BITS: usize = u32::BITS as usize;
 
+    #[inline(always)]
     fn reset_flags_sparse(&mut self, skip: usize) {
         let mask_set_index = ((skip / 2) - 1) % Self::BITS;
-        let mask_set = MASK_PATTERNS_U8[mask_set_index];
+        let mask_set = MASK_PATTERNS_U32[mask_set_index];
 
-        let rel_indices = index_pattern::<8>(skip);
+        let rel_indices = index_pattern::<32>(skip);
 
         self.words.chunks_exact_mut(skip).for_each(|chunk| {
             for i in 0..Self::BITS {
                 let word_idx = rel_indices[i];
-                chunk[word_idx] |= mask_set[i];
+                // TODO: safety note
+                unsafe {
+                    *chunk.get_unchecked_mut(word_idx) |= mask_set[i];
+                }
             }
         });
 
@@ -26,7 +29,10 @@ impl FlagStorageUnrolledBits8 {
         for i in 0..Self::BITS {
             let word_idx = rel_indices[i];
             if word_idx < remainder.len() {
-                remainder[word_idx] |= mask_set[i];
+                // TODO: safety note
+                unsafe {
+                    *remainder.get_unchecked_mut(word_idx) |= mask_set[i];
+                }
             } else {
                 break;
             }
@@ -41,16 +47,20 @@ impl FlagStorageUnrolledBits8 {
         }
     }
 
+    #[inline(always)]
     fn reset_flags_dense<const SKIP: usize>(&mut self) {
         let mask_set_index = ((SKIP / 2) - 1) % Self::BITS;
-        let mask_set = MASK_PATTERNS_U8[mask_set_index];
+        let mask_set = MASK_PATTERNS_U32[mask_set_index];
 
-        let rel_indices = index_pattern::<8>(SKIP);
+        let rel_indices = index_pattern::<32>(SKIP);
 
         self.words.chunks_exact_mut(SKIP).for_each(|chunk| {
             for i in 0..Self::BITS {
                 let word_idx = rel_indices[i];
-                chunk[word_idx] |= mask_set[i];
+                // TODO: safety note
+                unsafe {
+                    *chunk.get_unchecked_mut(word_idx) |= mask_set[i];
+                }
             }
         });
 
@@ -58,7 +68,10 @@ impl FlagStorageUnrolledBits8 {
         for i in 0..Self::BITS {
             let word_idx = rel_indices[i];
             if word_idx < remainder.len() {
-                remainder[word_idx] |= mask_set[i];
+                // TODO: safety note
+                unsafe {
+                    *remainder.get_unchecked_mut(word_idx) |= mask_set[i];
+                }
             } else {
                 break;
             }
@@ -72,19 +85,9 @@ impl FlagStorageUnrolledBits8 {
             *w &= !(1 << factor_bit);
         }
     }
-
-    fn print(&self, limit: usize) {
-        println!("Storage----");
-        for (i, w) in self.words.iter().take(limit).enumerate() {
-            println!("{:6}: {}", i, format_bits(*w));
-        }
-        let last_idx = self.words.len() - 1;
-        let last_word = self.words[last_idx];
-        println!("{:6}: {}", last_idx, format_bits(last_word));
-    }
 }
 
-impl FlagStorage for FlagStorageUnrolledBits8 {
+impl FlagStorage for FlagStorageUnrolledBits32 {
     fn create_true(size: usize) -> Self {
         let num_words = size / Self::BITS + (size % Self::BITS).min(1);
         Self {
@@ -93,6 +96,7 @@ impl FlagStorage for FlagStorageUnrolledBits8 {
         }
     }
 
+    #[inline(always)]
     fn reset_flags(&mut self, skip: usize) {
         // call into dispatcher
         // TODO: autogenerate match_reset_dispatch!(self, skip, 19, reset_flags_dense, reset_flags_sparse);
@@ -106,10 +110,17 @@ impl FlagStorage for FlagStorageUnrolledBits8 {
             15 => self.reset_flags_dense::<15>(),
             17 => self.reset_flags_dense::<17>(),
             19 => self.reset_flags_dense::<19>(),
-            _ => self.reset_flags_sparse(skip)
+            21 => self.reset_flags_dense::<21>(),
+            23 => self.reset_flags_dense::<23>(),
+            25 => self.reset_flags_dense::<25>(),
+            27 => self.reset_flags_dense::<27>(),
+            29 => self.reset_flags_dense::<29>(),
+            31 => self.reset_flags_dense::<31>(),
+            _ => self.reset_flags_sparse(skip),
         };
     }
 
+    #[inline(always)]
     fn get(&self, index: usize) -> bool {
         if index >= self.length_bits {
             return false;
@@ -117,29 +128,4 @@ impl FlagStorage for FlagStorageUnrolledBits8 {
         let word = self.words.get(index / Self::BITS).unwrap();
         *word & (1 << (index % Self::BITS)) == 0
     }
-}
-
-fn format_bits(val: u8) -> String {
-    let bits = (0..8)
-        .map(|b| (val & (1 << b)) >> b)
-        .map(|b| format!("{} ", b));
-    bits.collect()
-}
-
-pub fn self_test() {
-    let size = 512;
-    self_test_specific(3, size);
-    self_test_specific(5, size);
-    self_test_specific(7, size);
-    self_test_specific(63, size);
-    self_test_specific(1001, size);
-    self_test_specific(2000, size);
-}
-
-fn self_test_specific(skip: usize, size: usize) {
-    let mut storage = FlagStorageUnrolledBits8::create_true(size);
-    let lim = 16;
-    println!("Testing with skip = {}", skip);
-    storage.reset_flags(skip);
-    storage.print(lim);
 }
