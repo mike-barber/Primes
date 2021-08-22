@@ -11,6 +11,8 @@ use std::{
 };
 use structopt::StructOpt;
 
+use crate::unrolled::FlagStorageUnrolledBits8;
+
 mod flag_storage;
 mod patterns;
 mod unrolled;
@@ -732,6 +734,11 @@ struct CommandLineOptions {
     #[structopt(long)]
     bits_striped_hybrid: bool,
 
+    /// Run variant that uses normal, linear bit-level storage, but uses a smarter
+    /// `unrolled` algorithm. Collaboration with @GordonBGood.
+    #[structopt(long)]
+    bits_unrolled: bool,
+
     /// Run variant that uses byte-level storage
     #[structopt(long)]
     bytes: bool,
@@ -758,6 +765,7 @@ fn main() {
         opt.bits_striped,
         opt.bits_striped_blocks,
         opt.bits_striped_hybrid,
+        opt.bits_unrolled,
         opt.bytes,
     ]
     .iter()
@@ -867,6 +875,21 @@ fn main() {
             for _ in 0..repetitions {
                 run_implementation::<FlagStorageBitVectorStripedBlocks<BLOCK_SIZE_SMALL, true>>(
                     "bit-storage-striped-hybrid-small",
+                    1,
+                    run_duration,
+                    threads,
+                    limit,
+                    opt.print,
+                );
+            }
+        }
+
+        if opt.bits_unrolled || run_all {
+            thread::sleep(Duration::from_secs(1));
+            print_header(threads, limit, run_duration);
+            for _ in 0..repetitions {
+                run_implementation::<FlagStorageUnrolledBits8>(
+                    "bit-storage-unrolled8",
                     1,
                     run_duration,
                     threads,
