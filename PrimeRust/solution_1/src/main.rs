@@ -1,5 +1,6 @@
+use flag_storage::FlagStorage;
 use primes::{
-    print_results_stderr, report_results_stdout, FlagStorage, FlagStorageBitVector,
+    print_results_stderr, report_results_stdout, FlagStorageBitVector,
     FlagStorageBitVectorRotate, FlagStorageBitVectorStriped, FlagStorageBitVectorStripedBlocks,
     FlagStorageByteVector, PrimeSieve, BLOCK_SIZE_DEFAULT, BLOCK_SIZE_SMALL,
 };
@@ -10,8 +11,15 @@ use std::{
 };
 use structopt::StructOpt;
 
+mod flag_storage;
+mod patterns;
+mod unrolled;
+
+
 pub mod primes {
     use std::{collections::HashMap, time::Duration, usize};
+
+    use crate::flag_storage::FlagStorage;
 
     /// Shorthand for the `u8` bit count to avoid additional conversions.
     const U8_BITS: usize = u8::BITS as usize;
@@ -61,17 +69,12 @@ pub mod primes {
         }
     }
 
-    /// Trait defining the interface to different kinds of storage, e.g.
-    /// bits within bytes, a vector of bytes, etc.
-    pub trait FlagStorage {
-        /// create new storage for given number of flags pre-initialised to all true
-        fn create_true(size: usize) -> Self;
+    pub fn square_start(skip_factor: usize) -> usize {
+        skip_factor * skip_factor / 2
+    }
 
-        /// reset all flags at indices starting at `start` with a stride of `skip`
-        fn reset_flags(&mut self, start: usize, skip: usize);
-
-        /// get a specific flag
-        fn get(&self, index: usize) -> bool;
+    pub fn minimum_start(skip_factor: usize) -> usize {
+        skip_factor / 2 + skip_factor
     }
 
     /// Storage using a simple vector of bytes.
@@ -87,8 +90,8 @@ pub mod primes {
         }
 
         #[inline(always)]
-        fn reset_flags(&mut self, start: usize, skip: usize) {
-            let mut i = start;
+        fn reset_flags(&mut self, skip: usize) {
+            let mut i = square_start(skip);
 
             // unrolled loop - there's a small benefit
             let end_unrolled = self.0.len().saturating_sub(skip * 3);
@@ -139,8 +142,8 @@ pub mod primes {
         }
 
         #[inline(always)]
-        fn reset_flags(&mut self, start: usize, skip: usize) {
-            let mut i = start;
+        fn reset_flags(&mut self, skip: usize) {
+            let mut i = square_start(skip);
             while i < self.words.len() * U32_BITS {
                 let word_idx = i / U32_BITS;
                 let bit_idx = i % U32_BITS;
@@ -180,7 +183,8 @@ pub mod primes {
         }
 
         #[inline(always)]
-        fn reset_flags(&mut self, start: usize, skip: usize) {
+        fn reset_flags(&mut self, skip: usize) {
+            let start = square_start(skip);
             let mut i = start;
             let roll_bits = skip as u32;
             let mut rolling_mask1 = !(1 << (start % U32_BITS));
@@ -260,8 +264,9 @@ pub mod primes {
         }
 
         #[inline(always)]
-        fn reset_flags(&mut self, start: usize, skip: usize) {
+        fn reset_flags(&mut self, skip: usize) {
             // determine start bit, and first word
+            let start = square_start(skip);
             let words_len = self.words.len();
             let mut bit_idx = start / words_len;
             let mut word_idx = start % words_len;
@@ -453,8 +458,9 @@ pub mod primes {
         /// and so on. This works really well for larger skip sizes, as the
         /// words we need to reset are generally quite far apart.
         #[inline(always)]
-        fn reset_flags_general(&mut self, start: usize, skip: usize) {
+        fn reset_flags_general(&mut self, skip: usize) {
             // determine first block, start bit, and first word
+            let start = square_start(skip);
             let block_idx_start = start / Self::BLOCK_SIZE_BITS;
             let offset_idx = start % Self::BLOCK_SIZE_BITS;
             let mut bit_idx = offset_idx / BLOCK_SIZE;
@@ -526,7 +532,7 @@ pub mod primes {
         /// algorithm for higher skip factors. If `HYBRID` is false,
         /// we rely only on the general approach for all skip factors.
         #[inline(always)]
-        fn reset_flags(&mut self, start: usize, skip: usize) {
+        fn reset_flags(&mut self, skip: usize) {
             if HYBRID {
                 match skip {
                     // We only really gain an advantage from dense
@@ -538,10 +544,10 @@ pub mod primes {
                     3 => self.reset_flags_dense::<3>(),
                     5 => self.reset_flags_dense::<5>(),
                     7 => self.reset_flags_dense::<7>(),
-                    _ => self.reset_flags_general(start, skip),
+                    _ => self.reset_flags_general(skip),
                 }
             } else {
-                self.reset_flags_general(start, skip);
+                self.reset_flags_general(skip);
             }
         }
 
@@ -614,9 +620,8 @@ pub mod primes {
                 }
 
                 // reset flags starting at `start`, every `factor`'th flag
-                let start = factor * factor / 2;
                 let skip = factor;
-                self.flags.reset_flags(start, skip);
+                self.flags.reset_flags(skip);
 
                 factor += 2;
             }
@@ -946,7 +951,7 @@ fn run_implementation<T: 'static + FlagStorage + Send>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::primes::PrimeValidator;
+    use crate::{flag_storage::FlagStorage, primes::{PrimeValidator, minimum_start, square_start}, unrolled::FlagStorageUnrolledBits8};
 
     #[test]
     fn sieve_known_correct_bits() {
@@ -982,9 +987,18 @@ mod tests {
         sieve_known_correct::<FlagStorageByteVector>();
     }
 
+    #[test]
+    fn sieve_known_correct_unrolled_bits() {
+        sieve_known_correct::<FlagStorageUnrolledBits8>();
+    }
+
     fn sieve_known_correct<T: FlagStorage>() {
         let validator = PrimeValidator::default();
         for (sieve_size, expected_primes) in validator.known_results_iter() {
+            // skip really large sieves -- tests are taking unnecessarily long
+            if *sieve_size > 10_000_000 {
+                continue; 
+            }
             let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(*sieve_size);
             sieve.run_sieve();
             assert_eq!(
@@ -1034,6 +1048,11 @@ mod tests {
         basic_storage_correct::<FlagStorageBitVectorStripedBlocks<BLOCK_SIZE_DEFAULT, true>>();
     }
 
+    #[test]
+    fn storage_bit_unrolled_correct() {
+        basic_storage_correct::<FlagStorageUnrolledBits8>();
+    }
+
     fn basic_storage_correct<T: FlagStorage>() {
         let size = 100_000;
         let mut storage = T::create_true(size);
@@ -1043,9 +1062,16 @@ mod tests {
 
         // use realistic start values, as hybrid storage makes assumptions
         // about where to start resetting
-        storage.reset_flags(7, 5);
+        storage.reset_flags(5);
+        let s5 = square_start(5);
+        let m5 = minimum_start(5);
         for i in 0..size {
-            let expected_inv = (i >= 7) && ((i - 7) % 5 == 0);
+            // we're agnostic of these values; storage could set them either way
+            // depending on the layout
+            if i >= m5 && i <= s5 && (i - m5) % 5 == 0 {
+                continue;
+            }
+            let expected_inv = (i >= s5) && ((i - s5) % 5 == 0);
             assert_eq!(
                 storage.get(i),
                 !expected_inv,
@@ -1054,10 +1080,20 @@ mod tests {
             );
         }
 
-        storage.reset_flags(19, 13);
+        storage.reset_flags(13);
+        let s13 = square_start(13);
+        let m13 = minimum_start(13);
         for i in 0..size {
-            let first = (i >= 7) && ((i - 7) % 5 == 0);
-            let second = (i >= 19) && ((i - 19) % 13 == 0);
+            // we're agnostic of these values; storage could set them either way
+            // depending on the layout
+            if i >= m5 && i <= s5 && (i - m5) % 5 == 0 {
+                continue;
+            }
+            if i >= m13 && i <= s13 && (i - m13) % 13 == 0 {
+                continue;
+            }
+            let first = (i >= s5) && ((i - s5) % 5 == 0);
+            let second = (i >= s13) && ((i - s13) % 13 == 0);
             let expected_inv = first || second;
             assert_eq!(
                 storage.get(i),
