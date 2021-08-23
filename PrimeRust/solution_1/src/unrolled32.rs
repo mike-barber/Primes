@@ -1,7 +1,4 @@
-use crate::{
-    flag_storage::FlagStorage,
-    patterns::{index_pattern, MASK_PATTERNS_U32},
-};
+use crate::{flag_storage::FlagStorage, patterns::{MASK_PATTERNS_U32, index_pattern}};
 
 pub struct FlagStorageUnrolledBits32 {
     words: Vec<u32>,
@@ -150,35 +147,8 @@ impl FlagStorage for FlagStorageUnrolledBits32 {
 struct ResetterDenseU32<const SKIP: usize>();
 impl<const SKIP: usize> ResetterDenseU32<SKIP> {
     const BITS: usize = 32;
-
-    const fn mask_pattern_set() -> [u32; 32] {
-        let start = SKIP / 2;
-        let mut pattern = [0; 32];
-        let mut i = 0;
-        while i < 32 {
-            let relative_index = start + i * SKIP;
-            let shift = relative_index % 32;
-            let mask = 1u32 << shift;
-            pattern[i] = mask;
-            i += 1;
-        }
-        pattern
-    }
-
-    const fn index_pattern() -> [usize; 32] {
-        let start = SKIP / 2;
-        let mut pattern = [0; 32];
-        let mut i = 0;
-        while i < 32 {
-            let relative_index = start + i * SKIP;
-            pattern[i] = relative_index / 32;
-            i += 1;
-        }
-        pattern
-    }
-
-    const MASK_SET: [u32; 32] = Self::mask_pattern_set();
-    const REL_INDICES: [usize; 32] = Self::index_pattern();
+    const MASK_SET: [u32; 32] = crate::patterns::mask_pattern_set::<32>(SKIP);
+    const REL_INDICES: [usize; 32] = crate::patterns::index_pattern(SKIP);
 
     #[inline(never)]
     pub fn reset_dense(words: &mut [u32]) {
@@ -194,7 +164,7 @@ impl<const SKIP: usize> ResetterDenseU32<SKIP> {
 
         let remainder = words.chunks_exact_mut(SKIP).into_remainder();
         for i in 0..Self::BITS {
-            let word_idx = Self::REL_INDICES[i];
+            let word_idx =  Self::REL_INDICES[i];
             if word_idx < remainder.len() {
                 // TODO: safety note
                 unsafe {
