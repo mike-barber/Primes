@@ -22,9 +22,8 @@ pub const fn modulo_pattern<const BITS: usize>(skip: usize) -> [usize; BITS] {
     pattern
 }
 
-// can remove potentially
-pub const fn mask_pattern_set_u32<const BITS: usize>(skip: usize) -> [u32; 32] {
-    let mod_pattern = modulo_pattern::<BITS>(skip);
+pub const fn mask_pattern_set_u32(skip: usize) -> [u32; 32] {
+    let mod_pattern = modulo_pattern::<32>(skip);
     let mut masks = [0; 32];
     let mut i = 0;
     while i < 32 {
@@ -34,8 +33,8 @@ pub const fn mask_pattern_set_u32<const BITS: usize>(skip: usize) -> [u32; 32] {
     masks
 }
 
-pub const fn mask_pattern_set_u64<const BITS: usize>(skip: usize) -> [u64; 64] {
-    let mod_pattern = modulo_pattern::<BITS>(skip);
+pub const fn mask_pattern_set_u64(skip: usize) -> [u64; 64] {
+    let mod_pattern = modulo_pattern::<64>(skip);
     let mut masks = [0; 64];
     let mut i = 0;
     while i < 64 {
