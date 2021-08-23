@@ -177,6 +177,7 @@ impl<const SKIP: usize> ResetterDenseU32<SKIP> {
     const MASK_SET: [u32; 32] = Self::mask_pattern_set();
     const REL_INDICES: [usize; 32] = Self::index_pattern();
 
+    #[inline(never)]
     pub fn reset_dense(words: &mut [u32]) {
         words.chunks_exact_mut(SKIP).for_each(|chunk| {
             for i in 0..Self::BITS {
