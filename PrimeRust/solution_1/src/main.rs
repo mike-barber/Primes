@@ -11,12 +11,13 @@ use std::{
 };
 use structopt::StructOpt;
 
-use crate::{unrolled32::FlagStorageUnrolledBits32, unrolled8::FlagStorageUnrolledBits8};
+use crate::{unrolled32::FlagStorageUnrolledBits32, unrolled64::FlagStorageUnrolledBits64, unrolled8::FlagStorageUnrolledBits8};
 
 mod flag_storage;
 mod patterns;
 mod unrolled8;
 mod unrolled32;
+mod unrolled64;
 
 
 pub mod primes {
@@ -908,6 +909,16 @@ fn main() {
                     opt.print,
                 );
             }
+            for _ in 0..repetitions {
+                run_implementation::<FlagStorageUnrolledBits64>(
+                    "bit-storage-unrolled64",
+                    1,
+                    run_duration,
+                    threads,
+                    limit,
+                    opt.print,
+                );
+            }
         }
     }
 }
@@ -985,7 +996,7 @@ fn run_implementation<T: 'static + FlagStorage + Send>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{flag_storage::FlagStorage, primes::{PrimeValidator, minimum_start, square_start}, unrolled32::FlagStorageUnrolledBits32, unrolled8::FlagStorageUnrolledBits8};
+    use crate::{flag_storage::FlagStorage, primes::{PrimeValidator, minimum_start, square_start}, unrolled32::FlagStorageUnrolledBits32, unrolled64::FlagStorageUnrolledBits64, unrolled8::FlagStorageUnrolledBits8};
 
     #[test]
     fn sieve_known_correct_bits() {
@@ -1029,6 +1040,11 @@ mod tests {
     #[test]
     fn sieve_known_correct_unrolled32_bits() {
         sieve_known_correct::<FlagStorageUnrolledBits32>();
+    }
+
+    #[test]
+    fn sieve_known_correct_unrolled64_bits() {
+        sieve_known_correct::<FlagStorageUnrolledBits64>();
     }
 
     fn sieve_known_correct<T: FlagStorage>() {
@@ -1095,6 +1111,11 @@ mod tests {
     #[test]
     fn storage_bit_unrolled32_correct() {
         basic_storage_correct::<FlagStorageUnrolledBits32>();
+    }
+
+    #[test]
+    fn storage_bit_unrolled64_correct() {
+        basic_storage_correct::<FlagStorageUnrolledBits64>();
     }
 
 

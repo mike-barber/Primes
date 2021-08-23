@@ -64,11 +64,29 @@ pub const fn mask_pattern_sets_u32() -> [[u32; 32]; 32] {
     mask_sets
 }
 
+pub const fn mask_pattern_sets_u64() -> [[u64; 64]; 64] {
+    let mut mask_sets = [[0; 64]; 64];
+    let mut i = 0;
+    while i < 64 {
+        let mut j = 0;
+        while j < 64 {
+            mask_sets[i][j] = 1 << BIT_PATTERNS_U64[i][j];
+            j += 1;
+        }
+        i += 1;
+    }
+    mask_sets
+}
+
 pub const BIT_PATTERNS_U8: [[usize; 8]; 8] = modulo_pattern_sets::<8>();
 pub const MASK_PATTERNS_U8: [[u8; 8]; 8] = mask_pattern_sets_u8();
 
 pub const BIT_PATTERNS_U32: [[usize; 32]; 32] = modulo_pattern_sets::<32>();
 pub const MASK_PATTERNS_U32: [[u32; 32]; 32] = mask_pattern_sets_u32();
+
+pub const BIT_PATTERNS_U64: [[usize; 64]; 64] = modulo_pattern_sets::<64>();
+pub const MASK_PATTERNS_U64: [[u64; 64]; 64] = mask_pattern_sets_u64();
+
 
 #[cfg(test)]
 mod tests {
