@@ -11,10 +11,10 @@ pub struct FlagStorageUnrolledBits8 {
 impl FlagStorageUnrolledBits8 {
     const BITS: usize = u8::BITS as usize;
 
-    // inline, since it's always the same
-    #[inline(always)]
-    fn reset_flags_sparse(&mut self, skip: usize) {
-        let mask_set_index = ((skip / 2) - 1) % Self::BITS;
+    // TODO: consider inlining
+    #[inline(never)]
+    fn reset_flags_sparse<const EQUIVALENT_SKIP: usize>(&mut self, skip: usize) {
+        let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % Self::BITS;
         let mask_set = MASK_PATTERNS_U8[mask_set_index];
 
         let rel_indices = index_pattern::<8>(skip);
@@ -112,11 +112,22 @@ impl FlagStorage for FlagStorageUnrolledBits8 {
             7 => self.reset_flags_dense::<7>(),
             9 => self.reset_flags_dense::<9>(),
             11 => self.reset_flags_dense::<11>(),
-            // 13 => self.reset_flags_dense::<13>(),
-            // 15 => self.reset_flags_dense::<15>(),
-            // 17 => self.reset_flags_dense::<17>(),
-            // 19 => self.reset_flags_dense::<19>(),
-            _ => self.reset_flags_sparse(skip),
+            13 => self.reset_flags_dense::<13>(),
+            15 => self.reset_flags_dense::<15>(),
+            17 => self.reset_flags_dense::<17>(),
+            19 => self.reset_flags_dense::<19>(),
+            skip_sparse => match ((skip_sparse / 2) - 1) % Self::BITS {
+                // TODO: this needs a clean up; we're doing unnecessary conversions
+                0 => self.reset_flags_sparse::<3>(skip),
+                1 => self.reset_flags_sparse::<5>(skip),
+                2 => self.reset_flags_sparse::<7>(skip),
+                3 => self.reset_flags_sparse::<9>(skip),
+                4 => self.reset_flags_sparse::<11>(skip),
+                5 => self.reset_flags_sparse::<13>(skip),
+                6 => self.reset_flags_sparse::<15>(skip),
+                7 => self.reset_flags_sparse::<17>(skip),
+                _ => debug_assert!(false, "this case should not occur")
+            }
         };
     }
 
