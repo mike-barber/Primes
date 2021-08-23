@@ -95,6 +95,9 @@ impl FlagStorage for FlagStorageUnrolledBits32 {
             55 => ResetterDenseU32::<55>::reset_dense(&mut self.words),
             57 => ResetterDenseU32::<57>::reset_dense(&mut self.words),
             59 => ResetterDenseU32::<59>::reset_dense(&mut self.words),
+            61 => ResetterDenseU32::<61>::reset_dense(&mut self.words),
+            63 => ResetterDenseU32::<63>::reset_dense(&mut self.words),
+            65 => ResetterDenseU32::<65>::reset_dense(&mut self.words),
             skip_sparse => match ((skip_sparse / 2) - 1) % Self::BITS {
                 // TODO: this needs a clean up; we're doing unnecessary conversions
                 0 => self.reset_flags_sparse::<{ (0 + 1) * 2 + 1 }>(skip),
