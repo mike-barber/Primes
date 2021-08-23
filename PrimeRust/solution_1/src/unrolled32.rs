@@ -147,7 +147,7 @@ impl FlagStorage for FlagStorageUnrolledBits32 {
 struct ResetterDenseU32<const SKIP: usize>();
 impl<const SKIP: usize> ResetterDenseU32<SKIP> {
     const BITS: usize = 32;
-    const MASK_SET: [u32; 32] = crate::patterns::mask_pattern_set::<32>(SKIP);
+    const MASK_SET: [u32; 32] = crate::patterns::mask_pattern_set_u32::<32>(SKIP);
     const REL_INDICES: [usize; 32] = crate::patterns::index_pattern(SKIP);
 
     #[inline(never)]

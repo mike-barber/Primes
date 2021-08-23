@@ -182,37 +182,10 @@ impl FlagStorage for FlagStorageUnrolledBits64 {
 struct ResetterDenseU64<const SKIP: usize>();
 impl<const SKIP: usize> ResetterDenseU64<SKIP> {
     const BITS: usize = 64;
+    const MASK_SET: [u64; 64] = crate::patterns::mask_pattern_set_u64::<64>(SKIP);
+    const REL_INDICES: [usize; 64] = crate::patterns::index_pattern(SKIP);
 
-    const fn mask_pattern_set() -> [u64; 64] {
-        let start = SKIP / 2;
-        let mut pattern = [0; 64];
-        let mut i = 0;
-        while i < 64 {
-            let relative_index = start + i * SKIP;
-            let shift = relative_index % 64;
-            let mask = 1 << shift;
-            pattern[i] = mask;
-            i += 1;
-        }
-        pattern
-    }
-
-    const fn index_pattern() -> [usize; 64] {
-        let start = SKIP / 2;
-        let mut pattern = [0; 64];
-        let mut i = 0;
-        while i < 64 {
-            let relative_index = start + i * SKIP;
-            pattern[i] = relative_index / 64;
-            i += 1;
-        }
-        pattern
-    }
-
-    const MASK_SET: [u64; 64] = Self::mask_pattern_set();
-    const REL_INDICES: [usize; 64] = Self::index_pattern();
-
-    #[inline(never)]
+    #[inline(always)]
     pub fn reset_dense(words: &mut [u64]) {
         words.chunks_exact_mut(SKIP).for_each(|chunk| {
             for i in 0..Self::BITS {
