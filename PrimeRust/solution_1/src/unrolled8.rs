@@ -11,6 +11,7 @@ pub struct FlagStorageUnrolledBits8 {
 impl FlagStorageUnrolledBits8 {
     const BITS: usize = u8::BITS as usize;
 
+    // inline, since it's always the same
     #[inline(always)]
     fn reset_flags_sparse(&mut self, skip: usize) {
         let mask_set_index = ((skip / 2) - 1) % Self::BITS;
@@ -50,7 +51,9 @@ impl FlagStorageUnrolledBits8 {
         }
     }
 
-    #[inline(always)]
+    // rather do a function call; we'll have more registers available, and it's
+    // not called very often
+    #[inline(never)]
     fn reset_flags_dense<const SKIP: usize>(&mut self) {
         let mask_set_index = ((SKIP / 2) - 1) % Self::BITS;
         let mask_set = MASK_PATTERNS_U8[mask_set_index];
