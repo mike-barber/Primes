@@ -185,7 +185,7 @@ impl<const SKIP: usize> ResetterDenseU64<SKIP> {
     #[inline(always)]
     pub fn reset_dense(words: &mut [u64]) {
         words.chunks_exact_mut(SKIP).for_each(|chunk| {
-            const CS: usize = 32;
+            const CS: usize = 16; // 8, 16, or 32 seems to work
             Self::REL_INDICES
                 .chunks_exact(CS)
                 .zip(Self::MASK_SET.chunks(CS))
