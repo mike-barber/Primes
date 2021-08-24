@@ -22,28 +22,28 @@ impl FlagStorageUnrolledBits8 {
     fn reset_flags_sparse<const EQUIVALENT_SKIP: usize>(&mut self, skip: usize) {
         //let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % 8;
         //let mask_set = MASK_PATTERNS_U8[mask_set_index];
-        let mask_set = crate::patterns::mask_pattern_set_u8(EQUIVALENT_SKIP); // MUCH faster!
-        let rel_indices = crate::patterns::index_pattern::<8>(skip);
+        let single_bit_mask_set = crate::patterns::mask_pattern_set_u8(EQUIVALENT_SKIP); // MUCH faster!
+        let relative_indices = crate::patterns::index_pattern::<8>(skip);
         
         // cast our u32 vector to bytes
-        let bytes: &mut [u8] = cast_slice_mut_u64_u8(&mut self.words);
-        bytes.chunks_exact_mut(skip).for_each(|chunk| {
+        let bytes_slice: &mut [u8] = cast_slice_mut_u64_u8(&mut self.words);
+        bytes_slice.chunks_exact_mut(skip).for_each(|chunk| {
             for i in 0..8 {
-                let word_idx = rel_indices[i];
+                let word_idx = relative_indices[i];
                 // TODO: safety note
                 unsafe {
-                    *chunk.get_unchecked_mut(word_idx) |= mask_set[i];
+                    *chunk.get_unchecked_mut(word_idx) |= single_bit_mask_set[i];
                 }
             }
         });
 
-        let remainder = bytes.chunks_exact_mut(skip).into_remainder();
+        let remainder = bytes_slice.chunks_exact_mut(skip).into_remainder();
         for i in 0..8 {
-            let word_idx = rel_indices[i];
+            let word_idx = relative_indices[i];
             if word_idx < remainder.len() {
                 // TODO: safety note
                 unsafe {
-                    *remainder.get_unchecked_mut(word_idx) |= mask_set[i];
+                    *remainder.get_unchecked_mut(word_idx) |= single_bit_mask_set[i];
                 }
             } else {
                 break;
@@ -54,7 +54,7 @@ impl FlagStorageUnrolledBits8 {
         let factor_index = skip / 2;
         let factor_word = factor_index / 8;
         let factor_bit = factor_index % 8;
-        if let Some(w) = bytes.get_mut(factor_word) {
+        if let Some(w) = bytes_slice.get_mut(factor_word) {
             *w &= !(1 << factor_bit);
         }
     }

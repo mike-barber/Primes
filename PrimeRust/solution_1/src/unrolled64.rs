@@ -179,41 +179,33 @@ impl FlagStorage for FlagStorageUnrolledBits64 {
 pub struct ResetterDenseU64<const SKIP: usize>();
 impl<const SKIP: usize> ResetterDenseU64<SKIP> {
     const BITS: usize = 64;
-    const MASK_SET: [u64; 64] = crate::patterns::mask_pattern_set_u64(SKIP);
-    const REL_INDICES: [usize; 64] = crate::patterns::index_pattern(SKIP);
+    const SINGLE_BIT_MASK_SET: [u64; 64] = crate::patterns::mask_pattern_set_u64(SKIP);
+    const RELATIVE_INDICES: [usize; 64] = crate::patterns::index_pattern(SKIP);
 
     #[inline(always)]
     pub fn reset_dense(words: &mut [u64]) {
         words.chunks_exact_mut(SKIP).for_each(|chunk| {
-            const CS: usize = 16; // 8, 16, or 32 seems to work
-            Self::REL_INDICES
-                .chunks_exact(CS)
-                .zip(Self::MASK_SET.chunks(CS))
+            const CHUNK_SIZE: usize = 16; // 8, 16, or 32 seems to work
+            Self::RELATIVE_INDICES
+                .chunks_exact(CHUNK_SIZE)
+                .zip(Self::SINGLE_BIT_MASK_SET.chunks(CHUNK_SIZE))
                 .for_each(|(word_indices, masks)| {
                     word_indices
                         .iter()
                         .zip(masks)
-                        .for_each(|(word_idx, mask)| unsafe {
-                            *chunk.get_unchecked_mut(*word_idx) |= mask;
+                        .for_each(|(word_idx, single_bit_mask)| unsafe {
+                            *chunk.get_unchecked_mut(*word_idx) |= single_bit_mask;
                         });
                 });
-
-            // for i in 0..Self::BITS {
-            //     let word_idx = Self::REL_INDICES[i];
-            //     // TODO: safety note
-            //     unsafe {
-            //         *chunk.get_unchecked_mut(word_idx) |= Self::MASK_SET[i];
-            //     }
-            // }
         });
 
         let remainder = words.chunks_exact_mut(SKIP).into_remainder();
         for i in 0..Self::BITS {
-            let word_idx = Self::REL_INDICES[i];
+            let word_idx = Self::RELATIVE_INDICES[i];
             if word_idx < remainder.len() {
                 // TODO: safety note
                 unsafe {
-                    *remainder.get_unchecked_mut(word_idx) |= Self::MASK_SET[i];
+                    *remainder.get_unchecked_mut(word_idx) |= Self::SINGLE_BIT_MASK_SET[i];
                 }
             } else {
                 break;
