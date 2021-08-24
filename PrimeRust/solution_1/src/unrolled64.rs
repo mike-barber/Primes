@@ -194,6 +194,7 @@ impl<const SKIP: usize> ResetterDenseU64<SKIP> {
                         .iter()
                         .zip(masks)
                         .for_each(|(word_idx, single_bit_mask)| unsafe {
+                            // TODO: safety note
                             *chunk.get_unchecked_mut(*word_idx) |= single_bit_mask;
                         });
                 });
