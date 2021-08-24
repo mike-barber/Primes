@@ -176,7 +176,7 @@ impl FlagStorage for FlagStorageUnrolledBits64 {
     }
 }
 
-struct ResetterDenseU64<const SKIP: usize>();
+pub struct ResetterDenseU64<const SKIP: usize>();
 impl<const SKIP: usize> ResetterDenseU64<SKIP> {
     const BITS: usize = 64;
     const MASK_SET: [u64; 64] = crate::patterns::mask_pattern_set_u64(SKIP);
@@ -185,13 +185,26 @@ impl<const SKIP: usize> ResetterDenseU64<SKIP> {
     #[inline(always)]
     pub fn reset_dense(words: &mut [u64]) {
         words.chunks_exact_mut(SKIP).for_each(|chunk| {
-            for i in 0..Self::BITS {
-                let word_idx = Self::REL_INDICES[i];
-                // TODO: safety note
-                unsafe {
-                    *chunk.get_unchecked_mut(word_idx) |= Self::MASK_SET[i];
-                }
-            }
+            const CS: usize = 32;
+            Self::REL_INDICES
+                .chunks_exact(CS)
+                .zip(Self::MASK_SET.chunks(CS))
+                .for_each(|(word_indices, masks)| {
+                    word_indices
+                        .iter()
+                        .zip(masks)
+                        .for_each(|(word_idx, mask)| unsafe {
+                            *chunk.get_unchecked_mut(*word_idx) |= mask;
+                        });
+                });
+
+            // for i in 0..Self::BITS {
+            //     let word_idx = Self::REL_INDICES[i];
+            //     // TODO: safety note
+            //     unsafe {
+            //         *chunk.get_unchecked_mut(word_idx) |= Self::MASK_SET[i];
+            //     }
+            // }
         });
 
         let remainder = words.chunks_exact_mut(SKIP).into_remainder();
