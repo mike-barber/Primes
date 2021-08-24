@@ -889,16 +889,16 @@ fn main() {
         if opt.bits_unrolled || run_all {
             thread::sleep(Duration::from_secs(1));
             print_header(threads, limit, run_duration);
-            // for _ in 0..repetitions {
-            //     run_implementation::<FlagStorageUnrolledBits8>(
-            //         "bit-storage-unrolled8",
-            //         1,
-            //         run_duration,
-            //         threads,
-            //         limit,
-            //         opt.print,
-            //     );
-            // }
+            for _ in 0..repetitions {
+                run_implementation::<FlagStorageUnrolledBits8>(
+                    "bit-storage-unrolled8",
+                    1,
+                    run_duration,
+                    threads,
+                    limit,
+                    opt.print,
+                );
+            }
             for _ in 0..repetitions {
                 run_implementation::<FlagStorageUnrolledBits32>(
                     "bit-storage-unrolled32",
