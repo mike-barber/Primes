@@ -22,6 +22,17 @@ pub const fn modulo_pattern<const BITS: usize>(skip: usize) -> [usize; BITS] {
     pattern
 }
 
+pub const fn mask_pattern_set_u8(skip: usize) -> [u8; 8] {
+    let mod_pattern = modulo_pattern::<8>(skip);
+    let mut masks = [0; 8];
+    let mut i = 0;
+    while i < 8 {
+        masks[i] = 1u8 << mod_pattern[i];
+        i += 1;
+    }
+    masks
+}
+
 pub const fn mask_pattern_set_u32(skip: usize) -> [u32; 32] {
     let mod_pattern = modulo_pattern::<32>(skip);
     let mut masks = [0; 32];

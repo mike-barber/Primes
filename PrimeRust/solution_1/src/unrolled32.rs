@@ -1,4 +1,4 @@
-use crate::{flag_storage::FlagStorage, patterns::{MASK_PATTERNS_U32, index_pattern}};
+use crate::flag_storage::FlagStorage;
 
 pub struct FlagStorageUnrolledBits32 {
     words: Vec<u32>,
@@ -11,10 +11,10 @@ impl FlagStorageUnrolledBits32 {
     // TODO: consider inlining
     #[inline(never)]
     fn reset_flags_sparse<const EQUIVALENT_SKIP: usize>(&mut self, skip: usize) {
-        let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % Self::BITS;
-        let mask_set = MASK_PATTERNS_U32[mask_set_index];
-
-        let rel_indices = index_pattern::<32>(skip);
+        //let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % Self::BITS;
+        //let mask_set = MASK_PATTERNS_U32[mask_set_index];
+        let mask_set = crate::patterns::mask_pattern_set_u32(EQUIVALENT_SKIP); // no change, but consistent
+        let rel_indices = crate::patterns::index_pattern::<32>(skip);
 
         self.words.chunks_exact_mut(skip).for_each(|chunk| {
             for i in 0..Self::BITS {
@@ -164,7 +164,7 @@ impl<const SKIP: usize> ResetterDenseU32<SKIP> {
 
         let remainder = words.chunks_exact_mut(SKIP).into_remainder();
         for i in 0..Self::BITS {
-            let word_idx =  Self::REL_INDICES[i];
+            let word_idx = Self::REL_INDICES[i];
             if word_idx < remainder.len() {
                 // TODO: safety note
                 unsafe {

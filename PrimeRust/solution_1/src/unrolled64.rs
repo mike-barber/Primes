@@ -1,7 +1,4 @@
-use crate::{
-    flag_storage::FlagStorage,
-    patterns::{index_pattern, MASK_PATTERNS_U64},
-};
+use crate::flag_storage::FlagStorage;
 
 pub struct FlagStorageUnrolledBits64 {
     words: Vec<u64>,
@@ -14,10 +11,10 @@ impl FlagStorageUnrolledBits64 {
     // TODO: consider inlining
     #[inline(never)]
     fn reset_flags_sparse<const EQUIVALENT_SKIP: usize>(&mut self, skip: usize) {
-        let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % Self::BITS;
-        let mask_set = MASK_PATTERNS_U64[mask_set_index];
-
-        let rel_indices = index_pattern::<64>(skip);
+        // let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % Self::BITS;
+        // let mask_set = MASK_PATTERNS_U64[mask_set_index];
+        let mask_set = crate::patterns::mask_pattern_set_u64(EQUIVALENT_SKIP); // no improvement
+        let rel_indices = crate::patterns::index_pattern::<64>(skip);
 
         self.words.chunks_exact_mut(skip).for_each(|chunk| {
             for i in 0..Self::BITS {

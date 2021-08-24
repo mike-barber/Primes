@@ -1,6 +1,5 @@
 use crate::{
     flag_storage::FlagStorage,
-    patterns::{index_pattern, MASK_PATTERNS_U8},
     unrolled32::ResetterDenseU32,
 };
 
@@ -20,9 +19,10 @@ impl FlagStorageUnrolledBits8 {
     // TODO: consider inlining
     #[inline(never)]
     fn reset_flags_sparse<const EQUIVALENT_SKIP: usize>(&mut self, skip: usize) {
-        let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % 8;
-        let mask_set = MASK_PATTERNS_U8[mask_set_index];
-        let rel_indices = index_pattern::<8>(skip);
+        //let mask_set_index = ((EQUIVALENT_SKIP / 2) - 1) % 8;
+        //let mask_set = MASK_PATTERNS_U8[mask_set_index];
+        let mask_set = crate::patterns::mask_pattern_set_u8(EQUIVALENT_SKIP); // MUCH faster!
+        let rel_indices = crate::patterns::index_pattern::<8>(skip);
         
         // cast our u32 vector to bytes
         let bytes: &mut [u8] = cast_slice_mut_u32_u8(&mut self.words);
