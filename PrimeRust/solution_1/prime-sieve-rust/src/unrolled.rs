@@ -82,6 +82,42 @@ fn reinterpret_slice_mut_u64_u8(words: &mut [u64]) -> &mut [u8] {
     unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, words.len() * 8) }
 }
 
+struct PageAlignedArray {
+    length: usize,
+    layout: std::alloc::Layout,
+    ptr: *mut u8,
+}
+impl PageAlignedArray {
+    pub fn create(length: usize) -> Self {
+        let layout = std::alloc::Layout::from_size_align(length * 8, 4*1024).expect("allocation: alignment error");
+        let ptr = unsafe { std::alloc::alloc_zeroed(layout) };
+        Self {
+            layout,
+            length,
+            ptr,
+        }
+    }
+
+    #[inline(always)]
+    pub fn slice_mut(&mut self) -> &mut [u64] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr as *mut u64, self.length) }
+    }
+
+    #[inline(always)]
+    pub fn slice(&self) -> &[u64] {
+        unsafe { std::slice::from_raw_parts(self.ptr as *mut u64, self.length) }
+    }
+}
+impl Drop for PageAlignedArray {
+    fn drop(&mut self) {
+        unsafe {
+            std::alloc::dealloc(self.ptr, self.layout);
+        }
+    }
+}
+// Safety: we do not leak ptr, and we have a drop to deallocate it
+unsafe impl Send for PageAlignedArray {}
+
 /// Storage structure implementing standard linear bit storage, but with a hybrid bit setting strategy:
 /// - dense resetting for small skip factors
 /// - sparse resetting for larger skip factors
@@ -89,7 +125,7 @@ fn reinterpret_slice_mut_u64_u8(words: &mut [u64]) -> &mut [u8] {
 /// approach combined with the elements of the dense-resetting approach in my `bit-storage-striped-hybrid`
 /// solution.
 pub struct FlagStorageUnrolledHybrid {
-    words: Vec<u64>,
+    words: PageAlignedArray,
     length_bits: usize,
 }
 
@@ -97,7 +133,7 @@ impl FlagStorage for FlagStorageUnrolledHybrid {
     fn create_true(size: usize) -> Self {
         let num_words = size / 64 + (size % 64).min(1);
         Self {
-            words: vec![0; num_words],
+            words: PageAlignedArray::create(num_words),
             length_bits: size,
         }
     }
@@ -135,7 +171,7 @@ impl FlagStorage for FlagStorageUnrolledHybrid {
             3,
             2,
             129, // 64 unique sets
-            ResetterDenseU64::<N>::reset_dense(&mut self.words),
+            ResetterDenseU64::<N>::reset_dense(self.words.slice_mut()),
             {
                 // fallback to sparse resetter, and dispatch to the correct one
                 // given the equivalent skip
@@ -145,7 +181,7 @@ impl FlagStorage for FlagStorageUnrolledHybrid {
                     3,
                     2,
                     17,
-                    ResetterSparseU8::<N>::reset_sparse(&mut self.words, skip),
+                    ResetterSparseU8::<N>::reset_sparse(self.words.slice_mut(), skip),
                     debug_assert!(
                         false,
                         "this case should not occur skip {} equivalent {}",
@@ -161,7 +197,7 @@ impl FlagStorage for FlagStorageUnrolledHybrid {
         if index >= self.length_bits {
             return false;
         }
-        let word = self.words.get(index / 64).unwrap();
+        let word = self.words.slice().get(index / 64).unwrap();
         *word & (1 << (index % 64)) == 0
     }
 }
