@@ -284,18 +284,18 @@ impl<const EQUIVALENT_SKIP: usize> ResetterSparseU8<EQUIVALENT_SKIP> {
         });
 
         let remainder = slice.chunks_exact_mut(skip).into_remainder();
-        // #[allow(clippy::needless_range_loop)]
-        // for i in 0..8 {
-        //     let word_idx = relative_indices[i];
-        //     if word_idx < remainder.len() {
-        //         // Safety: check above breaks the loop before we exceed remainder.len()
-        //         unsafe {
-        //             *remainder.get_unchecked_mut(word_idx) |= Self::SINGLE_BIT_MASK_SET[i];
-        //         }
-        //     } else {
-        //         break;
-        //     }
-        // }
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..8 {
+            let word_idx = relative_indices[i];
+            if word_idx < remainder.len() {
+                // Safety: check above breaks the loop before we exceed remainder.len()
+                unsafe {
+                    *remainder.get_unchecked_mut(word_idx) |= Self::SINGLE_BIT_MASK_SET[i];
+                }
+            } else {
+                break;
+            }
+        }
         // let remainder_len = remainder.len();
         // relative_indices
         //     .iter()
@@ -304,14 +304,14 @@ impl<const EQUIVALENT_SKIP: usize> ResetterSparseU8<EQUIVALENT_SKIP> {
         //     .for_each(|(&word_idx, mask)| unsafe {
         //         *remainder.get_unchecked_mut(word_idx) |= mask;
         //     });
-        relative_indices
-            .iter()
-            .zip(Self::SINGLE_BIT_MASK_SET)
-            .for_each(|(&word_idx, mask)| {
-                if let Some(word) = remainder.get_mut(word_idx) {
-                    *word |= mask;
-                }
-            });
+        // relative_indices
+        //     .iter()
+        //     .zip(Self::SINGLE_BIT_MASK_SET)
+        //     .for_each(|(&word_idx, mask)| {
+        //         if let Some(word) = remainder.get_mut(word_idx) {
+        //             *word |= mask;
+        //         }
+        //     });
 
         // restore original factor bit -- we *may* have clobbered it, and it is the prime
         let factor_index = skip / 2;
