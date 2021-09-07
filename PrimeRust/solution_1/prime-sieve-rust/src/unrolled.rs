@@ -161,11 +161,11 @@ impl FlagStorage for FlagStorageUnrolledHybrid {
 
     #[inline(always)]
     fn get(&self, index: usize) -> bool {
-        if index >= self.length_bits {
-            return false;
+        debug_assert!(index < self.length_bits, "index out of range on get: {}", index);
+        unsafe {
+            let word = self.words.get_unchecked(index / 64);
+            *word & (1 << (index % 64)) == 0
         }
-        let word = self.words.get(index / 64).unwrap();
-        *word & (1 << (index % 64)) == 0
     }
 }
 
