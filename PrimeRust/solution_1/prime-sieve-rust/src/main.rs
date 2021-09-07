@@ -614,32 +614,50 @@ pub mod primes {
                 .count()
         }
 
-        // calculate the primes up to the specified limit
+        // // calculate the primes up to the specified limit
+        // #[inline(always)]
+        // pub fn run_sieve_old(&mut self) {
+        //     let mut factor = 3;
+        //     let q = (self.sieve_size as f32).sqrt() as usize;
+
+        //     loop {
+        //         // find next factor - next still-flagged number
+        //         factor = (factor / 2..self.sieve_size / 2)
+        //             .find(|n| self.flags.get(*n))
+        //             .unwrap()
+        //             * 2
+        //             + 1;
+
+        //         // check for termination _before_ resetting flags;
+        //         // note: need to check up to and including q, otherwise we
+        //         // fail to catch cases like sieve_size = 1000
+        //         if factor > q {
+        //             break;
+        //         }
+
+        //         println!("factor {}, n {}", factor, (factor - 1) / 2);
+
+        //         // reset flags starting at `start`, every `factor`'th flag
+        //         let skip = factor;
+        //         self.flags.reset_flags(skip);
+
+        //         factor += 2;
+        //     }
+        // }
+
         #[inline(always)]
         pub fn run_sieve(&mut self) {
-            let mut factor = 3;
+            let start_factor = 3;
+            let start = start_factor / 2;
+
             let q = (self.sieve_size as f32).sqrt() as usize;
+            let end = (q - 1) / 2;
 
-            loop {
-                // find next factor - next still-flagged number
-                factor = (factor / 2..self.sieve_size / 2)
-                    .find(|n| self.flags.get(*n))
-                    .unwrap()
-                    * 2
-                    + 1;
-
-                // check for termination _before_ resetting flags;
-                // note: need to check up to and including q, otherwise we
-                // fail to catch cases like sieve_size = 1000
-                if factor > q {
-                    break;
+            for n in start..=end {
+                if self.flags.get(n) {
+                    let skip = n * 2 + 1;
+                    self.flags.reset_flags(skip);
                 }
-
-                // reset flags starting at `start`, every `factor`'th flag
-                let skip = factor;
-                self.flags.reset_flags(skip);
-
-                factor += 2;
             }
         }
     }
