@@ -211,18 +211,33 @@ impl<const SKIP: usize> ResetterDenseU64<SKIP> {
     const BITS: usize = 64;
     const SINGLE_BIT_MASK_SET: [u64; 64] = mask_pattern_set_u64(SKIP);
     const RELATIVE_INDICES: [usize; 64] = index_pattern(SKIP);
+    // determine the offset of the first skip-size chunk we need
+    // to touch, and proceed from there.
+    const SQUARE_START: usize = square_start(SKIP);
+    const START_CHUNK_OFFSET: usize = square_start(SKIP) / 64 / SKIP * SKIP;
+    const RESTORE_FACTOR:bool = Self::START_CHUNK_OFFSET <= SKIP / 2;
 
     #[inline(never)]
     pub fn reset_dense(words: &mut [u64]) {
         // determine the offset of the first skip-size chunk we need
         // to touch, and proceed from there.
-        let square_start = square_start(SKIP);
-        debug_assert!(
-            square_start < words.len() * 64,
-            "square_start should be within the bounds of our array; check caller"
-        );
-        let start_chunk_offset = square_start / 64 / SKIP * SKIP;
-        let slice = &mut words[start_chunk_offset..];
+        // let square_start = square_start(SKIP);
+        // debug_assert!(
+        //     square_start < words.len() * 64,
+        //     "square_start should be within the bounds of our array; check caller"
+        // );
+        // let start_chunk_offset = square_start / 64 / SKIP * SKIP;
+        // debug_assert!(
+        //     start_chunk_offset > SKIP / 2 /8,
+        //     "sparse resets are for larger skip factors; this starts too early: {}",
+        //     start_chunk_offset
+        // );
+        // debug_assert!(
+        //     Self::SQUARE_START < words.len() * 64,
+        //     "square_start should be within the bounds of our array; check caller"
+        // );
+
+        let slice = &mut words[Self::START_CHUNK_OFFSET..];
 
         slice.chunks_exact_mut(SKIP).for_each(|chunk| {
             const CHUNK_SIZE: usize = 16; // 8, 16, or 32 seems to work
@@ -253,12 +268,14 @@ impl<const SKIP: usize> ResetterDenseU64<SKIP> {
             }
         }
 
-        // restore original factor bit -- we have clobbered it, and it is the prime
-        let factor_index = SKIP / 2;
-        let factor_word = factor_index / Self::BITS;
-        let factor_bit = factor_index % Self::BITS;
-        if let Some(w) = words.get_mut(factor_word) {
-            *w &= !(1 << factor_bit);
+        // restore original factor bit if we have clobbered it, as it is the prime
+        if Self::RESTORE_FACTOR {
+            let factor_index = SKIP / 2;
+            let factor_word = factor_index / Self::BITS;
+            let factor_bit = factor_index % Self::BITS;
+            if let Some(w) = words.get_mut(factor_word) {
+                *w &= !(1 << factor_bit);
+            }
         }
     }
 }
