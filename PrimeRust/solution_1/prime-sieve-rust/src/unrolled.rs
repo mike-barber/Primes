@@ -131,48 +131,81 @@ impl FlagStorage for FlagStorageUnrolledHybrid {
     /// }
     /// ```
     #[inline(always)]
+    #[allow(unused_variables)]
     fn reset_flags(&mut self, skip: usize) {
         
         // fast path for very large skip factors
         // TODO: check if this works (only relevant for non-inlined sparse maybe)
-        if skip > 800 {
-            let mut i = square_start(skip);
-            while i < self.words.len() * 64 {
-                let word_idx = i / 64;
-                let bit_idx = i % 64;
-                unsafe {
-                    *self.words.get_unchecked_mut(word_idx) |= 1 << bit_idx;
-                }
-                i += skip;
-            }
+        // if skip > 900 {
+        //     let mut i = square_start(skip);
+        //     while i < self.words.len() * 64 {
+        //         let word_idx = i / 64;
+        //         let bit_idx = i % 64;
+        //         unsafe {
+        //             *self.words.get_unchecked_mut(word_idx) |= 1 << bit_idx;
+        //         }
+        //         i += skip;
+        //     }
+        //     return;
+        // }
+
+        if skip > 129 {
+            let equivalent_skip = pattern_equivalent_skip(skip, 8);
+            generic_dispatch!(
+                equivalent_skip,
+                3,
+                2,
+                17,
+                ResetterSparseU8::<N>::reset_sparse(&mut self.words, skip),
+                debug_assert!(
+                    false,
+                    "this case should not occur skip {} equivalent {}",
+                    skip, equivalent_skip
+                )
+            );
             return;
         }
-        
-        // dense resets for all odd numbers in {3, 5, ... =129}
+
         generic_dispatch!(
             skip,
             3,
             2,
             129, // 64 unique sets
             ResetterDenseU64::<N>::reset_dense(&mut self.words),
-            {
-                // fallback to sparse resetter, and dispatch to the correct one
-                // given the equivalent skip
-                let equivalent_skip = pattern_equivalent_skip(skip, 8);
-                generic_dispatch!(
-                    equivalent_skip,
-                    3,
-                    2,
-                    17,
-                    ResetterSparseU8::<N>::reset_sparse(&mut self.words, skip),
-                    debug_assert!(
-                        false,
-                        "this case should not occur skip {} equivalent {}",
-                        skip, equivalent_skip
-                    )
-                );
-            }
+            debug_assert!(
+                false,
+                "this case should not occur skip {}",
+                skip
+            )
         );
+
+
+        
+        // dense resets for all odd numbers in {3, 5, ... =129}
+        // generic_dispatch!(
+        //     skip,
+        //     3,
+        //     2,
+        //     129, // 64 unique sets
+        //     ResetterDenseU64::<N>::reset_dense(&mut self.words),
+        //     {
+        //         // fallback to sparse resetter, and dispatch to the correct one
+        //         // given the equivalent skip
+        //         let equivalent_skip = pattern_equivalent_skip(skip, 8);
+        //         generic_dispatch!(
+        //             equivalent_skip,
+        //             3,
+        //             2,
+        //             17,
+        //             ResetterSparseU8::<N>::reset_sparse(&mut self.words, skip),
+        //             debug_assert!(
+        //                 false,
+        //                 "this case should not occur skip {} equivalent {}",
+        //                 skip, equivalent_skip
+        //             )
+        //         );
+        //     }
+        // );
     }
 
     #[inline(always)]
