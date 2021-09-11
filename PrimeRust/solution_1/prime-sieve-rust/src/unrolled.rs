@@ -132,6 +132,22 @@ impl FlagStorage for FlagStorageUnrolledHybrid {
     /// ```
     #[inline(always)]
     fn reset_flags(&mut self, skip: usize) {
+        
+        // fast path for very large skip factors
+        // TODO: check if this works (only relevant for non-inlined sparse maybe)
+        if skip > 800 {
+            let mut i = square_start(skip);
+            while i < self.words.len() * 64 {
+                let word_idx = i / 64;
+                let bit_idx = i % 64;
+                unsafe {
+                    *self.words.get_unchecked_mut(word_idx) |= 1 << bit_idx;
+                }
+                i += skip;
+            }
+            return;
+        }
+        
         // dense resets for all odd numbers in {3, 5, ... =129}
         generic_dispatch!(
             skip,
