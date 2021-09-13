@@ -8,10 +8,14 @@
 #
 FROM rust:1.54 AS build
 
+# Force cargo to load the crates.io index (so this
+# layer can be cached - it is not conditional on the
+# code)
+RUN cargo search num_cpus -q --limit 1
+
 WORKDIR /app
 COPY . .
-RUN cargo test
-RUN cargo build --release
+RUN cargo test && cargo build --release
 
 # 2. runtime stage
 #   - start from clean container
