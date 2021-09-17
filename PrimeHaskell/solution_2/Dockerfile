@@ -1,22 +1,22 @@
-FROM haskell:8.10
+FROM debian:11
 
+RUN apt-get -y update && apt-get -y upgrade && \
+    apt-get -y install wget xz-utils build-essential libgmp-dev llvm libtinfo5 && \
+    mkdir /ghc-haskell && cd /ghc-haskell && \
+# install GHC 8.10.6 from binary distobuiton...
+    wget -q https://downloads.haskell.org/~ghc/8.10.7/ghc-8.10.7-x86_64-deb9-linux.tar.xz && \
+    tar -axf ghc-8.10.7-x86_64-deb9-linux.tar.xz && \
+# the following for aarm64:
+#   wget https://downloads.haskell.org/~ghc/8.10.7/ghc-8.10.7-aarch64-deb10-linux.tar.xz && \
+#   tar -axf ghc-8.10.7-aarch64-deb10-linux.tar.xz && \
+    cd ghc-8.10.7 && ./configure && make install && cd / && rm -rdf /ghc-haskell
+
+# all installations into Debioan 10 finished, buld the app...
 WORKDIR /opt/sieve
 
-RUN cabal update
+COPY Primes*.hs ./
 
-RUN apt-get update
-RUN apt-get install --yes lsb-release wget software-properties-common
+RUN ghc Primes.hs
 
-RUN wget https://apt.llvm.org/llvm.sh
-RUN chmod +x llvm.sh
-RUN ./llvm.sh 9
-
-COPY ./dragrace-haskell2.cabal /opt/sieve/dragrace-haskell2.cabal
-
-RUN cabal update && cabal build --only-dependencies -j4
-
-COPY . /opt/sieve
-
-RUN PATH=/usr/lib/llvm-9/bin:$PATH cabal build dragrace-haskell2  	 	
-
-CMD [ "cabal","run","dragrace-haskell2" ]
+# to run it...
+ENTRYPOINT [ "/opt/sieve/Primes" ]
