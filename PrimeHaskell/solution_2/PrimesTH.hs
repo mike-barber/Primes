@@ -2,7 +2,7 @@
 --   implements extree loop unrolling and dense culling...
 --   Note:  `case` is often used to force strictness rather than as a branch!
 
-{-# OPTIONS_GHC -O2 -fobject-code -fllvm #-}
+-- {-# OPTIONS_GHC -O2 -fobject-code -fllvm #-}
 {-
 {-# OPTIONS_GHC -optlo --O3 -optlo --disable-lsr -optlc -O3 -optlc --disable-lsr #-}
 --}

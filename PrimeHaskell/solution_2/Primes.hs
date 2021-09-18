@@ -1,6 +1,6 @@
 -- Sieve of Eratosthenes benchmarkwith five different techniques...
 
-{-# OPTIONS_GHC -O2 -fllvm #-}
+-- {-# OPTIONS_GHC -O2 -fllvm #-}
 
 import PrimesNoLSR ( Technique(..), primesSoENoLSR )
 

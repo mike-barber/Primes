@@ -1,8 +1,8 @@
 -- implements the Techniques that benefit from LLVM `--disable-slr`...
 --   Note:  disable Loop Strength Reduction, which mis-optimized in this case.
 
-{-# OPTIONS_GHC -O2 -fllvm #-}
-{-# OPTIONS_GHC -optlo --O3 -optlo --disable-lsr -optlc -O3 -optlc --disable-lsr #-}
+-- {-# OPTIONS_GHC -O2 -fllvm #-}
+-- {-# OPTIONS_GHC -optlo --O3 -optlo --disable-lsr -optlc -O3 -optlc --disable-lsr #-}
 {-# LANGUAGE TemplateHaskell, MagicHash, UnboxedTuples, FlexibleContexts #-}
 
 module PrimesNoLSR ( Technique(..), primesSoENoLSR ) where
