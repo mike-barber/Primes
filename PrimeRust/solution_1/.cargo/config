@@ -7,7 +7,14 @@
 rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f"  ]
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f" ]
+#rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f" ]
+rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f", "--emit", "asm,llvm-ir,mir", 
+    "-C", "llvm-args=-filter-print-funcs=_ZN16prime_sieve_rust8unrolled25ResetterDenseU64$LT$_$GT$11reset_dense17h95d779f43b27305eE --print-after-all"]
+#rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f", "--emit", "asm,llvm-ir,mir", "-C", "llvm-args=-x86-asm-syntax=intel" ]
+#rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f", "--emit", "asm,llvm-ir,mir", "-C", "llvm-args=--help-hidden" ]
+#--debug-pass==Executions
+#rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f", "--emit", "asm,llvm-ir,mir", "-C", "llvm-args=--debug-pass=Executions" ]
+#rustflags = [ "-C", "target-cpu=native", "-C", "target-feature=-avx512f", "--emit", "asm,llvm-ir,mir", "-Z", "print-llvm-passes" ]
 
 [target.aarch64-unknown-linux-gnu]
 rustflags = [ "-C", "target-cpu=native" ]
