@@ -150,5 +150,6 @@ benchMark tec = do
   loop 0 (repeat cLIMIT)
 
 main :: IO ()
-main = forM_ [ BitTwiddle .. ExtremeHybrid ] benchMark
+--main = forM_ [ BitTwiddle .. ExtremeHybrid ] benchMark
+main = forM_ [ ExtremeHybrid ] benchMark
 

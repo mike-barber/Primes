@@ -17,4 +17,5 @@ ghc -v -o target/Primes -outputdir target \
     -pgmlc /usr/lib/llvm-12/bin/llc \
     -optlc -O3 -optlc -mtriple=$TRIPLE -optlc -march=$ARCH -optlc -mcpu=$CPU -optlc -mattr=+avx,+avx2 -optlc --vectorize-slp \
     -optlo -O3 -optlo -mtriple=$TRIPLE -optlo -march=$ARCH -optlo -mcpu=$CPU -optlo -mattr=+avx,+avx2 -optlo --slp-vectorizer -optlo --vector-combine \
+#    -optlo --print-after-all \
     Primes.hs 2>&1
