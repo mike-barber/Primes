@@ -8,9 +8,10 @@ TRIPLE="x86_64-pc-linux-gnu"
 CPU="$1"
 echo "CPU is $CPU"
 
-rm -rf target
-mkdir -p target
+rm -rf target tmp
+mkdir -p target tmp
 ghc -v -o target/Primes -outputdir target \
+    -keep-tmp-files -tmpdir ./tmp \
     -O2 -fllvm \
     -pgmlo /usr/lib/llvm-12/bin/opt \
     -pgmlc /usr/lib/llvm-12/bin/llc \
