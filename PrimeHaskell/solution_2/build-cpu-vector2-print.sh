@@ -14,10 +14,9 @@ echo "CPU is $CPU"
 
 rm -rf target tmp
 mkdir -p target tmp
-
 ghc -v -o target/Primes -outputdir target \
     -keep-tmp-files -tmpdir ./tmp \
-    -O2 -fllvm \
+    -O2 -fllvm -v \
     -pgmlo /usr/lib/llvm-12/bin/opt \
     -pgmlc /usr/lib/llvm-12/bin/llc \
     -optlc -O3 -optlc -mtriple=$TRIPLE -optlc -march=$ARCH -optlc -mcpu=$CPU -optlc -mattr=+avx,+avx2 \
