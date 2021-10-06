@@ -171,13 +171,8 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
     // word reset statements
     let word_resets_chunk: Vec<_> = index_range
         .clone()
-        .map(|idx| extreme_reset_word(quote! { chunk }, skip, idx))
+        .map(|idx| extreme_reset_word_ptr(skip, idx))
         .collect();
-
-    // let word_resets_remainder: Vec<_> = index_range
-    //     .clone()
-    //     .map(|idx| extreme_reset_word(quote! {remainder}, skip, idx))
-    //     .collect();
 
     // determine the offset of the first skip-size chunk we need
     // to touch, and proceed from there.
@@ -190,30 +185,24 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
             "square_start should be within the bounds of our array; check caller"
         );
 
-        // end: ceiling of number of chunks, and including last chunk
-        let end_chunk = (length_words + skip - 1) / skip;
-        let end_chunk_offset = end_chunk * skip;
-        
-        let slice = &mut words[#start_chunk_offset..end_chunk_offset];
-        
-        // whole chunks
-        slice.chunks_exact_mut(#skip).for_each(|chunk| {
-            #(
-                #word_resets_chunk
-            )*
-        });
+        unsafe {
+            // calculate start
+            let slice_ptr = words.as_mut_ptr();
+            let mut ptr = slice_ptr.add(#start_chunk_offset);
 
-        // no remainder -- we're doing just the chunks, and running slightly over into 
-        // our over-allocated space
-        //
-        // // remainder
-        // let remainder = slice.chunks_exact_mut(#skip).into_remainder();
-        // // ??? how to dispatch lots of ifs ???
-        // #(
-        //     if #index_range < remainder.len() {
-        //         #word_resets_remainder
-        //     }
-        // )*
+            // calculate end
+            let remaining_size = length_words - #start_chunk_offset;
+            let num_chunks_ceil = (remaining_size + #skip - 1) / #skip;
+            let end_ptr = slice_ptr.add(num_chunks_ceil * #skip);
+
+            // reset chunks, inserting reset statements
+            while ptr != end_ptr {
+                #(
+                    #word_resets_chunk
+                )*
+                ptr = ptr.add(#skip);
+            }
+        }
 
         // restore original factor bit -- we have clobbered it, and it is the prime
         let factor_index = #skip / 2;
@@ -228,53 +217,24 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
     code
 }
 
-/// Retrieves single word, then applies each mask in turn. When all masks
+/// Using pointers, retrieves single word, then applies each mask in turn. When all masks
 /// have been applied, write the word back to the slice.
-fn extreme_reset_word(
-    slice_expr: proc_macro2::TokenStream,
-    skip: usize,
-    word_idx: usize,
-) -> proc_macro2::TokenStream {
+fn extreme_reset_word_ptr(skip: usize, word_idx: usize) -> proc_macro2::TokenStream {
     let masks = calculate_masks(skip, word_idx);
+
+    if masks.is_empty() {
+        return quote! {};
+    }
 
     // by value - load, apply, apply, ..., store.
     let code = quote! {
-        let mut word = unsafe { *#slice_expr.get_unchecked(#word_idx) };
+        let p = ptr.add(#word_idx);
+        let mut word = *p;
         #(
             word |= #masks;
         )*
-        unsafe { *#slice_expr.get_unchecked_mut(#word_idx) = word; }
+        *p = word;
     };
-
-    // // everything in an unchecked block
-    // let code = quote! {
-    //     unsafe {
-    //         let mut word = *#slice_expr.get_unchecked(#word_idx);
-    //         #(
-    //         word |= #masks;
-    //         )*
-    //         *#slice_expr.get_unchecked_mut(#word_idx) = word;
-    //     }
-    // };
-
-    // // grab the word reference and run with it
-    // let code = quote! {
-    //     unsafe {
-    //         let word = #slice_expr.get_unchecked_mut(#word_idx);
-    //         #(
-    //         *word |= #masks;
-    //         )*
-    //     }
-    // };
-    
-    // // direct approach
-    // let code = quote! {
-    //     unsafe { 
-    //     #(
-    //         *#slice_expr.get_unchecked_mut(#word_idx) |= #masks; 
-    //     )*
-    //     }
-    // };
 
     code
 }
