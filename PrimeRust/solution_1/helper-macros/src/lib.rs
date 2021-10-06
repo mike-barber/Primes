@@ -174,10 +174,10 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
         .map(|idx| extreme_reset_word(quote! { chunk }, skip, idx))
         .collect();
 
-    let word_resets_remainder: Vec<_> = index_range
-        .clone()
-        .map(|idx| extreme_reset_word(quote! {remainder}, skip, idx))
-        .collect();
+    // let word_resets_remainder: Vec<_> = index_range
+    //     .clone()
+    //     .map(|idx| extreme_reset_word(quote! {remainder}, skip, idx))
+    //     .collect();
 
     // determine the offset of the first skip-size chunk we need
     // to touch, and proceed from there.
@@ -189,7 +189,12 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
             #square_start < words.len() * 64,
             "square_start should be within the bounds of our array; check caller"
         );
-        let slice = &mut words[#start_chunk_offset..];        
+
+        // end: ceiling of number of chunks, and including last chunk
+        let end_chunk = (length_words + skip - 1) / skip;
+        let end_chunk_offset = end_chunk * skip;
+        
+        let slice = &mut words[#start_chunk_offset..end_chunk_offset];
         
         // whole chunks
         slice.chunks_exact_mut(#skip).for_each(|chunk| {
@@ -198,14 +203,17 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
             )*
         });
 
-        // remainder
-        let remainder = slice.chunks_exact_mut(#skip).into_remainder();
-        // ??? how to dispatch lots of ifs ???
-        #(
-            if #index_range < remainder.len() {
-                #word_resets_remainder
-            }
-        )*
+        // no remainder -- we're doing just the chunks, and running slightly over into 
+        // our over-allocated space
+        //
+        // // remainder
+        // let remainder = slice.chunks_exact_mut(#skip).into_remainder();
+        // // ??? how to dispatch lots of ifs ???
+        // #(
+        //     if #index_range < remainder.len() {
+        //         #word_resets_remainder
+        //     }
+        // )*
 
         // restore original factor bit -- we have clobbered it, and it is the prime
         let factor_index = #skip / 2;

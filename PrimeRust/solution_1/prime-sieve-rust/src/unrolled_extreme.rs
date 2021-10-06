@@ -18,14 +18,18 @@ use crate::{
 pub struct FlagStorageExtremeHybrid {
     words: Vec<u64>,
     length_bits: usize,
+    length_words: usize,
 }
 
 impl FlagStorage for FlagStorageExtremeHybrid {
+
     fn create_true(size: usize) -> Self {
         let num_words = size / 64 + (size % 64).min(1);
+        let over_allocate = num_words + 129;
         Self {
-            words: vec![0; num_words],
+            words: vec![0; over_allocate],
             length_bits: size,
+            length_words: num_words
         }
     }
 
@@ -34,12 +38,13 @@ impl FlagStorage for FlagStorageExtremeHybrid {
         // sparse resets for skip factors larger than those covered by dense resets
         if skip > 129 {
             let equivalent_skip = pattern_equivalent_skip(skip, 8);
+            let words = &mut self.words[..self.length_words];
             generic_dispatch!(
                 equivalent_skip,
                 3,
                 2,
                 17,
-                ResetterSparseU8::<N>::reset_sparse(&mut self.words, skip),
+                ResetterSparseU8::<N>::reset_sparse(words, skip),
                 debug_assert!(
                     false,
                     "this case should not occur skip {} equivalent {}",
@@ -51,6 +56,7 @@ impl FlagStorage for FlagStorageExtremeHybrid {
 
         // dense resets for all odd numbers in {3, 5, ... =129}
         let words = &mut self.words[..];
+        let length_words = self.length_words;
         extreme_reset!(
             skip,
             debug_assert!(
