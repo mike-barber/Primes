@@ -233,6 +233,14 @@ impl<const SKIP: usize> ResetterDenseU64<SKIP> {
     }
 }
 
+/// Calculate the first index within the first chunk to reset
+pub const fn first_index_in_chunk(equivalent_skip: usize) -> usize {
+    let first_idx = equivalent_skip / 2;
+    let rel_start_idx = square_start(equivalent_skip) - first_idx;
+    let within_chunk_idx = (rel_start_idx / equivalent_skip) % 8;
+    within_chunk_idx
+}
+
 /// Specific implementation for the sparse resetter where we have words that
 /// are relatively far apart. This is generic on `EQUIVALENT_SKIP`, which allows
 /// the compiler to calculate the mask-patterns efficiently. However, we still
@@ -242,6 +250,7 @@ impl<const SKIP: usize> ResetterDenseU64<SKIP> {
 pub struct ResetterSparseU8<const EQUIVALENT_SKIP: usize>();
 impl<const EQUIVALENT_SKIP: usize> ResetterSparseU8<EQUIVALENT_SKIP> {
     const SINGLE_BIT_MASK_SET: [u8; 8] = mask_pattern_set_u8(EQUIVALENT_SKIP);
+    const FIRST_INDEX_IN_CHUNK: usize = first_index_in_chunk(EQUIVALENT_SKIP);
 
     #[inline(always)]
     fn reset_sparse(words: &mut [u64], skip: usize) {
@@ -253,12 +262,12 @@ impl<const EQUIVALENT_SKIP: usize> ResetterSparseU8<EQUIVALENT_SKIP> {
 
         // determine the offset of the first skip-size chunk we need
         // to touch, and proceed from there.
-        let square_start = square_start(skip);
+        let sq_start = square_start(skip);
         debug_assert!(
-            square_start < bytes.len() * 8,
+            sq_start < bytes.len() * 8,
             "square_start should be within the bounds of our array; check caller"
         );
-        let start_chunk_offset = square_start / 8 / skip * skip;
+        let start_chunk_offset = sq_start / 8 / skip * skip;
         debug_assert!(
             start_chunk_offset > skip / 2 / 8,
             "sparse resets are for larger skip factors; this starts too early: {}",
@@ -266,7 +275,21 @@ impl<const EQUIVALENT_SKIP: usize> ResetterSparseU8<EQUIVALENT_SKIP> {
         );
         let slice = &mut bytes[start_chunk_offset..];
 
-        slice.chunks_exact_mut(skip).for_each(|chunk| {
+        let mut chunks = slice.chunks_exact_mut(skip);
+
+        if let Some(chunk) = chunks.next() {
+            #[allow(clippy::needless_range_loop)]
+            for i in Self::FIRST_INDEX_IN_CHUNK..8 {
+                let word_idx = relative_indices[i];
+                // Safety: relative indices are all smaller than `skip` by construction
+                unsafe {
+                    *chunk.get_unchecked_mut(word_idx) |= Self::SINGLE_BIT_MASK_SET[i];
+                }
+            }
+        }
+
+        // subsequent chunks
+        (&mut chunks).for_each(|chunk| {
             #[allow(clippy::needless_range_loop)]
             for i in 0..8 {
                 let word_idx = relative_indices[i];
@@ -277,7 +300,8 @@ impl<const EQUIVALENT_SKIP: usize> ResetterSparseU8<EQUIVALENT_SKIP> {
             }
         });
 
-        let remainder = slice.chunks_exact_mut(skip).into_remainder();
+        // remainder
+        let remainder = chunks.into_remainder();
         #[allow(clippy::needless_range_loop)]
         for i in 0..8 {
             let word_idx = relative_indices[i];
