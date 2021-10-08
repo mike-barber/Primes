@@ -57,14 +57,7 @@ impl FlagStorage for FlagStorageExtremeHybrid {
         // dense resets for all odd numbers in {3, 5, ... =129}
         let words = &mut self.words[..];
         let length_words = self.length_words;
-        extreme_reset!(
-            skip,
-            debug_assert!(
-                false,
-                "dense reset function should not be called for skip {}",
-                skip
-            )
-        );
+        extreme_reset!(skip);
     }
 
     #[inline(always)]

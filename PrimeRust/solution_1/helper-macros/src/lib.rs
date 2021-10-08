@@ -1,8 +1,10 @@
 extern crate proc_macro;
 
+use std::iter::FromIterator;
+
 use proc_macro::TokenStream;
 use proc_macro2::{Group, Literal, TokenTree};
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::{
     self,
     parse::{Parse, ParseStream, Result},
@@ -165,7 +167,7 @@ fn calculate_masks(skip: usize, word_idx: usize) -> Vec<u64> {
     res
 }
 
-fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
+fn extreme_reset_for_skip(skip: usize, function_name: Ident) -> proc_macro2::TokenStream {
     let index_range = 0..skip;
 
     // word reset statements
@@ -180,36 +182,39 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
     let start_chunk_offset = square_start / 64 / skip * skip;
 
     let code = quote! {
-        debug_assert!(
-            #square_start < words.len() * 64,
-            "square_start should be within the bounds of our array; check caller"
-        );
+        #[inline(never)]
+        fn #function_name(words: &mut [u64], length_words: usize) {
+            debug_assert!(
+                #square_start < words.len() * 64,
+                "square_start should be within the bounds of our array; check caller"
+            );
 
-        unsafe {
-            // calculate start
-            let slice_ptr = words.as_mut_ptr();
-            let mut ptr = slice_ptr.add(#start_chunk_offset);
+            unsafe {
+                // calculate start
+                let slice_ptr = words.as_mut_ptr();
+                let mut ptr = slice_ptr.add(#start_chunk_offset);
 
-            // calculate end
-            let remaining_size = length_words - #start_chunk_offset;
-            let num_chunks_ceil = (remaining_size + #skip - 1) / #skip;
-            let end_ptr = slice_ptr.add(num_chunks_ceil * #skip);
+                // calculate end
+                let remaining_size = length_words - #start_chunk_offset;
+                let num_chunks_ceil = (remaining_size + #skip - 1) / #skip;
+                let end_ptr = slice_ptr.add(num_chunks_ceil * #skip);
 
-            // reset chunks, inserting reset statements
-            while ptr != end_ptr {
-                #(
+                // reset chunks, inserting reset statements
+                while ptr != end_ptr {
+                    #(
                     #word_resets_chunk
-                )*
-                ptr = ptr.add(#skip);
+                    )*
+                    ptr = ptr.add(#skip);
+                }
             }
-        }
 
-        // restore original factor bit -- we have clobbered it, and it is the prime
-        let factor_index = #skip / 2;
-        let factor_word = factor_index / 64;
-        let factor_bit = factor_index % 64;
-        if let Some(w) = words.get_mut(factor_word) {
-            *w &= !(1 << factor_bit);
+            // restore original factor bit -- we have clobbered it, and it is the prime
+            let factor_index = #skip / 2;
+            let factor_word = factor_index / 64;
+            let factor_bit = factor_index % 64;
+            if let Some(w) = words.get_mut(factor_word) {
+                *w &= !(1 << factor_bit);
+            }
         }
     };
 
@@ -222,8 +227,9 @@ fn extreme_reset_for_skip(skip: usize) -> proc_macro2::TokenStream {
 fn extreme_reset_word_ptr(skip: usize, word_idx: usize) -> proc_macro2::TokenStream {
     let masks = calculate_masks(skip, word_idx);
 
+    // skip words requiring no masks
     if masks.is_empty() {
-        return quote! {};
+        return proc_macro2::TokenStream::default()
     }
 
     // by value - load, apply, apply, ..., store.
@@ -241,19 +247,12 @@ fn extreme_reset_word_ptr(skip: usize, word_idx: usize) -> proc_macro2::TokenStr
 
 struct ExtremeResetParmams {
     match_var: Ident,
-    fallback: Expr,
 }
 
 impl Parse for ExtremeResetParmams {
     fn parse(input: ParseStream) -> Result<Self> {
         let match_var: Ident = input.parse()?;
-        input.parse::<Token![,]>()?;
-
-        let fallback: Expr = input.parse()?;
-        Ok(Self {
-            match_var,
-            fallback,
-        })
+        Ok(Self { match_var })
     }
 }
 
@@ -265,27 +264,35 @@ pub fn extreme_reset(input: TokenStream) -> TokenStream {
     let last = 129_usize;
     let extreme_reset_vals: Vec<_> = (3..=last).filter(|skip| skip % 2 != 0).collect();
 
+    // names for extreme reset functions
+    let function_names: Vec<_> = extreme_reset_vals
+        .iter()
+        .map(|&skip| format_ident!("extreme_reset_{:03}", skip))
+        .collect();
+
     // code for extreme resets
     let extreme_reset_codes: Vec<_> = extreme_reset_vals
         .iter()
-        .map(|&skip| extreme_reset_for_skip(skip))
+        .zip(function_names.iter().cloned())
+        .map(|(&skip, function_name)| extreme_reset_for_skip(skip, function_name))
         .collect();
 
     let match_var = params.match_var;
-    let fallback = params.fallback;
     let code = quote! {
-        if #match_var > #last {
-            #fallback
-        } else {
-            match #match_var {
-                #(
-                    #extreme_reset_vals => { #extreme_reset_codes },
-                )*
-                //3 => {#reset3},
-                _ => panic!("unexpected value")
-            }
+        // functions
+        #(
+        #extreme_reset_codes
+        )*
+
+        // dispatcher
+        match #match_var {
+            #(
+            #extreme_reset_vals => #function_names(words, length_words),
+            )*
+            _ => panic!("unexpected value")
         }
     };
     //println!("Code: {}", code.to_string());
-    TokenStream::from(code)
+    let ts = proc_macro2::TokenStream::from_iter(code.into_iter());
+    TokenStream::from(ts)
 }
