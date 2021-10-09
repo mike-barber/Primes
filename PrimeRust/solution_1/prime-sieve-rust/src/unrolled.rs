@@ -85,6 +85,21 @@ fn reinterpret_slice_mut_u64_u8(words: &mut [u64]) -> &mut [u8] {
     unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, words.len() * 8) }
 }
 
+pub type Word256 = [u64;4];
+
+pub fn reinterpret_wide_as_u8(words: &mut [Word256]) -> &mut [u8] {
+    unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, words.len() * 32) }
+}
+
+pub fn reinterpret_wide_mut_as_u64(words: &mut [Word256]) -> &mut [u64] {
+    unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u64, words.len() * 4) }
+}
+
+pub fn reinterpret_wide_as_u64(words: &[Word256]) -> &[u64] {
+    unsafe { std::slice::from_raw_parts(words.as_ptr() as *const u64, words.len() * 4) }
+}
+
+
 /// Storage structure implementing standard linear bit storage, but with a hybrid bit setting strategy:
 /// - dense resetting for small skip factors
 /// - sparse resetting for larger skip factors

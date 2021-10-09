@@ -1,9 +1,6 @@
 use helper_macros::{extreme_reset, generic_dispatch};
 
-use crate::{
-    primes::FlagStorage,
-    unrolled::{patterns::pattern_equivalent_skip, ResetterSparseU8},
-};
+use crate::{primes::FlagStorage, unrolled::{ResetterSparseU8, Word256, patterns::pattern_equivalent_skip, reinterpret_wide_as_u64, reinterpret_wide_mut_as_u64}};
 
 /// Storage structure implementing standard linear bit storage, but with a hybrid bit setting strategy:
 /// - dense resetting for small skip factors
@@ -13,15 +10,15 @@ use crate::{
 /// Performance, as a result, is very similar. This method has a slight edge over the const-generics, and is
 /// primarily included to demonstrate how this approach can be used in Rust.
 pub struct FlagStorageExtremeHybrid {
-    words: Vec<u64>,
+    words: Vec<Word256>,
     length_bits: usize,
 }
 
 impl FlagStorage for FlagStorageExtremeHybrid {
     fn create_true(size: usize) -> Self {
-        let num_words = size / 64 + (size % 64).min(1);
+        let num_words = size / 256 + (size % 256).min(1);
         Self {
-            words: vec![0; num_words],
+            words: vec![Word256::default(); num_words],
             length_bits: size,
         }
     }
@@ -34,13 +31,14 @@ impl FlagStorage for FlagStorageExtremeHybrid {
     fn reset_flags(&mut self, skip: usize) {
         // sparse resets for skip factors larger than those covered by dense resets
         if skip > 129 {
+            let words = reinterpret_wide_mut_as_u64(&mut self.words);
             let equivalent_skip = pattern_equivalent_skip(skip, 8);
             generic_dispatch!(
                 equivalent_skip,
                 3,
                 2,
                 17,
-                ResetterSparseU8::<N>::reset_sparse(&mut self.words, skip),
+                ResetterSparseU8::<N>::reset_sparse(words, skip),
                 debug_assert!(
                     false,
                     "this case should not occur skip {} equivalent {}",
@@ -60,7 +58,8 @@ impl FlagStorage for FlagStorageExtremeHybrid {
         if index >= self.length_bits {
             return false;
         }
-        let word = self.words.get(index / 64).unwrap();
+        let slice = reinterpret_wide_as_u64(&self.words);
+        let word = slice.get(index / 64).unwrap();
         *word & (1 << (index % 64)) == 0
     }
 }

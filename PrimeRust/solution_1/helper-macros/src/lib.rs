@@ -190,7 +190,8 @@ fn extreme_reset_for_skip(skip: usize, function_name: Ident) -> proc_macro2::Tok
 
     let code = quote! {
         #[inline(never)]
-        fn #function_name(words: &mut [u64]) {
+        fn #function_name(words: &mut [[u64;4]]) {
+            let words = reinterpret_wide_mut_as_u64(words);
             debug_assert!(
                 #square_start < words.len() * 64,
                 "square_start should be within the bounds of our array; check caller"
@@ -305,3 +306,4 @@ pub fn extreme_reset(input: TokenStream) -> TokenStream {
     let ts: proc_macro2::TokenStream = code.into_iter().collect();
     TokenStream::from(ts)
 }
+
