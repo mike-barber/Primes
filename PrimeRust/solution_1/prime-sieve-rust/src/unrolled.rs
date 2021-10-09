@@ -85,7 +85,11 @@ fn reinterpret_slice_mut_u64_u8(words: &mut [u64]) -> &mut [u8] {
     unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, words.len() * 8) }
 }
 
-pub type Word256 = [u64;4];
+pub type Word256 = std::arch::x86_64::__m256i;
+pub fn zero256() -> Word256 {
+    unsafe { std::arch::x86_64::_mm256_setzero_si256() }
+}
+
 
 pub fn reinterpret_wide_as_u8(words: &mut [Word256]) -> &mut [u8] {
     unsafe { std::slice::from_raw_parts_mut(words.as_mut_ptr() as *mut u8, words.len() * 32) }

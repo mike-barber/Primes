@@ -1,6 +1,6 @@
 use helper_macros::{extreme_reset, generic_dispatch};
 
-use crate::{primes::FlagStorage, unrolled::{ResetterSparseU8, Word256, patterns::pattern_equivalent_skip, reinterpret_wide_as_u64, reinterpret_wide_mut_as_u64}};
+use crate::{primes::FlagStorage, unrolled::{ResetterSparseU8, Word256, patterns::pattern_equivalent_skip, reinterpret_wide_as_u64, reinterpret_wide_mut_as_u64, zero256}};
 
 /// Storage structure implementing standard linear bit storage, but with a hybrid bit setting strategy:
 /// - dense resetting for small skip factors
@@ -18,7 +18,7 @@ impl FlagStorage for FlagStorageExtremeHybrid {
     fn create_true(size: usize) -> Self {
         let num_words = size / 256 + (size % 256).min(1);
         Self {
-            words: vec![Word256::default(); num_words],
+            words: vec![zero256(); num_words],
             length_bits: size,
         }
     }
@@ -30,7 +30,7 @@ impl FlagStorage for FlagStorageExtremeHybrid {
     #[inline(always)]
     fn reset_flags(&mut self, skip: usize) {
         // sparse resets for skip factors larger than those covered by dense resets
-        if skip > 129 {
+        if skip > 513 {
             let words = reinterpret_wide_mut_as_u64(&mut self.words);
             let equivalent_skip = pattern_equivalent_skip(skip, 8);
             generic_dispatch!(

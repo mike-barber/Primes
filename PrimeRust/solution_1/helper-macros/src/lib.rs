@@ -190,7 +190,7 @@ fn extreme_reset_for_skip(skip: usize, function_name: Ident) -> proc_macro2::Tok
 
     let code = quote! {
         #[inline(never)]
-        fn #function_name(words: &mut [[u64;4]]) {
+        fn #function_name(words: &mut [std::arch::x86_64::__m256i]) {
             let words = reinterpret_wide_mut_as_u64(words);
             debug_assert!(
                 #square_start < words.len() * 64,
@@ -272,7 +272,7 @@ pub fn extreme_reset(input: TokenStream) -> TokenStream {
     let params = parse_macro_input!(input as ExtremeResetParams);
 
     // all odd numbers in [3,129]
-    let last = 129_usize;
+    let last = 513_usize;
     let extreme_reset_vals: Vec<_> = (3..=last).filter(|skip| skip % 2 != 0).collect();
 
     // names for extreme reset functions: `extreme_reset_003`, `extreme_reset_005`, etc.
