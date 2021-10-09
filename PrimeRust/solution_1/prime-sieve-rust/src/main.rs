@@ -974,35 +974,38 @@ fn run_implementation_st<T: 'static + FlagStorage + Send>(
 ) {
     // run sieves
     let start_time = Instant::now();
+    let end_time = start_time + run_duration;
     let mut local_passes = 0;
-    let mut last_sieve = None;
-    while (Instant::now() - start_time) < run_duration {
-        let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
-        sieve.run_sieve();
-        last_sieve.replace(sieve);
-        local_passes += 1;
+    while Instant::now() < end_time {
+        for _ in 0..16 {
+            let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
+            sieve.run_sieve();
+            local_passes += 1;
+        }
     }
 
     // record end time
     let end_time = Instant::now();
+    let duration = end_time - start_time;
 
-    // get totals and print results based on one of the sieves
-    if let Some(sieve) = last_sieve {
-        let duration = end_time - start_time;
-        // print results to stderr for convenience
-        print_results_stderr(
-            label,
-            &sieve,
-            print_primes,
-            duration,
-            local_passes,
-            1,
-            &primes::PrimeValidator::default(),
-        );
-        // and report results to stdout for reporting
-        report_results_stdout(label, bits_per_prime, duration, local_passes, 1);
-        eprintln!();
-    }
+    // get totals and print results based on an example sieve
+    let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
+    sieve.run_sieve();
+
+    // print results to stderr for convenience
+    print_results_stderr(
+        label,
+        &sieve,
+        print_primes,
+        duration,
+        local_passes,
+        1,
+        &primes::PrimeValidator::default(),
+    );
+
+    // and report results to stdout for reporting
+    report_results_stdout(label, bits_per_prime, duration, local_passes, 1);
+    eprintln!();
 }
 
 /// Multithreaded runner
@@ -1063,7 +1066,10 @@ fn run_implementation_mt<T: 'static + FlagStorage + Send>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{primes::{minimum_start, square_start, PrimeValidator}, unrolled_extreme::FlagStorageExtremeHybrid};
+    use crate::{
+        primes::{minimum_start, square_start, PrimeValidator},
+        unrolled_extreme::FlagStorageExtremeHybrid,
+    };
 
     #[test]
     fn sieve_known_correct_bits() {
