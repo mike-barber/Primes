@@ -591,13 +591,17 @@ pub mod primes {
     where
         T: FlagStorage,
     {
-        #[inline(always)]
+        #[inline(never)]
         pub fn new(sieve_size: usize) -> Self {
+            // create
             let num_flags = sieve_size / 2 + 1;
-            PrimeSieve {
+            let mut sieve = PrimeSieve {
                 sieve_size,
                 flags: T::create_true(num_flags),
-            }
+            };
+            // run sieve
+            sieve.run_sieve();
+            sieve
         }
 
         fn is_num_flagged(&self, number: usize) -> bool {
@@ -617,7 +621,7 @@ pub mod primes {
 
         // calculate the primes up to the specified limit
         #[inline(always)]
-        pub fn run_sieve(&mut self) {
+        fn run_sieve(&mut self) {
             let mut factor = 3;
             let q = (self.sieve_size as f32).sqrt() as usize;
 
@@ -950,7 +954,7 @@ fn run_implementation<T: 'static + FlagStorage + Send>(
 ) {
     for _ in 0..repetitions {
         // delay prior to start to allow processor to cool down
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_millis(4800));
         match num_threads {
             1 => {
                 run_implementation_st::<T>(label, bits_per_prime, run_duration, limit, print_primes)
@@ -977,14 +981,20 @@ fn run_implementation_st<T: 'static + FlagStorage + Send>(
     limit: usize,
     print_primes: bool,
 ) {
+    // brief warmup
+    let start_time = Instant::now();
+    let warmup_duration = Duration::from_millis(200);
+    while (Instant::now() - start_time) < warmup_duration {
+        let _sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
+    }
+
     // run sieves
     let start_time = Instant::now();
     let mut local_passes = 0;
     let mut last_sieve = None;
     while (Instant::now() - start_time) < run_duration {
         last_sieve.take(); // drop prior sieve before creating new one
-        let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
-        sieve.run_sieve();
+        let sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
         last_sieve.replace(sieve);
         local_passes += 1;
     }
@@ -1032,8 +1042,7 @@ fn run_implementation_mt<T: 'static + FlagStorage + Send>(
                 let mut last_sieve = None;
                 while (Instant::now() - start_time) < run_duration {
                     last_sieve.take(); // drop prior sieve before creating new one
-                    let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
-                    sieve.run_sieve();
+                    let sieve: PrimeSieve<T> = primes::PrimeSieve::new(limit);
                     last_sieve.replace(sieve);
                     local_passes += 1;
                 }
@@ -1127,8 +1136,7 @@ mod tests {
             if *sieve_size > 10_000_000 {
                 continue;
             }
-            let mut sieve: PrimeSieve<T> = primes::PrimeSieve::new(*sieve_size);
-            sieve.run_sieve();
+            let sieve: PrimeSieve<T> = primes::PrimeSieve::new(*sieve_size);
             assert_eq!(
                 *expected_primes,
                 sieve.count_primes(),
